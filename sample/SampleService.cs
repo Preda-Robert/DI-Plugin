@@ -45,4 +45,19 @@ namespace SampleApp
     {
         public ServiceB(ServiceA a) { }
     }
+
+    // Simple registration example to exercise \"missing registration\" detection.
+    // ILogger and IEmailSender are registered; ProductRepository, ServiceA, ServiceB are not.
+    public class CompositionRoot
+    {
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddScoped<ILogger, ConsoleLogger>();
+            services.AddScoped<IEmailSender, SmtpEmailSender>();
+            services.AddTransient<ProductRepository>();
+        }
+    }
+
+    public class ConsoleLogger : ILogger { }
+    public class SmtpEmailSender : IEmailSender { }
 }

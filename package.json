@@ -18,6 +18,10 @@
       {
         "command": "di-plugin.analyzeFile",
         "title": "DI: Analyze current file"
+      },
+      {
+        "command": "di-plugin.suggestRegistrations",
+        "title": "DI: Suggest registrations for current file"
       }
     ]
   },

@@ -29,6 +29,15 @@ export interface CircularDependencyIssue {
   cycle: string[];
 }
 
+/** Constructor parameter whose type appears unregistered in the current file. */
+export interface MissingRegistrationIssue {
+  className: string;
+  paramType: string;
+  paramName: string;
+  startIndex: number;
+  endIndex: number;
+}
+
 export interface CSharpDiAnalysis {
   constructors: ConstructorInfo[];
   errors: string[];
@@ -36,6 +45,8 @@ export interface CSharpDiAnalysis {
   concreteTypeIssues: ConcreteTypeIssue[];
   /** Cycles in constructor dependency graph within this file. */
   circularDependencyIssues: CircularDependencyIssue[];
+  /** Parameters for which we could not find any Add*(<TService,...>) registration in this file. */
+  missingRegistrationIssues: MissingRegistrationIssue[];
 }
 
 const parser = new Parser();
@@ -238,10 +249,59 @@ export function analyzeCSharp(source: string): CSharpDiAnalysis {
   const cycleLists = findCycles(graph);
   const circularDependencyIssues: CircularDependencyIssue[] = cycleLists.map((cycle) => ({ cycle }));
 
+  // DI issues: missing registrations (file-local, based on Add*(<TService, ...>) patterns)
+  const registeredTypes = new Set<string>();
+  const registrationRegex = /Add(?:Singleton|Scoped|Transient)\s*<([^>]+)>/g;
+  let match: RegExpExecArray | null;
+  while ((match = registrationRegex.exec(source)) !== null) {
+    const inner = match[1];
+    inner
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0)
+      .forEach((t) => registeredTypes.add(t));
+  }
+
+  const primitiveTypes = new Set<string>([
+    "bool",
+    "byte",
+    "sbyte",
+    "short",
+    "ushort",
+    "int",
+    "uint",
+    "long",
+    "ulong",
+    "float",
+    "double",
+    "decimal",
+    "char",
+    "string",
+    "object",
+  ]);
+
+  const missingRegistrationIssues: MissingRegistrationIssue[] = [];
+  for (const c of constructors) {
+    for (const p of c.parameters) {
+      const t = p.type;
+      if (!t || t === "?" || primitiveTypes.has(t)) continue;
+      if (!registeredTypes.has(t)) {
+        missingRegistrationIssues.push({
+          className: c.className,
+          paramType: t,
+          paramName: p.name,
+          startIndex: p.startIndex,
+          endIndex: p.endIndex,
+        });
+      }
+    }
+  }
+
   return {
     constructors,
     errors,
     concreteTypeIssues,
     circularDependencyIssues,
+    missingRegistrationIssues,
   };
 }
