@@ -1,0 +1,29 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "sample", "sample", "{4F9DEAE5-078F-E77A-2E4A-FEB6FFE226FF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventPlanner", "sample\EventPlanner\EventPlanner.csproj", "{8361D279-2F06-317C-E14E-50E5F7B7486D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8361D279-2F06-317C-E14E-50E5F7B7486D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8361D279-2F06-317C-E14E-50E5F7B7486D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8361D279-2F06-317C-E14E-50E5F7B7486D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8361D279-2F06-317C-E14E-50E5F7B7486D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{8361D279-2F06-317C-E14E-50E5F7B7486D} = {4F9DEAE5-078F-E77A-2E4A-FEB6FFE226FF}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A93A8C95-C107-47C2-9920-F92DD3D611D3}
+	EndGlobalSection
+EndGlobal

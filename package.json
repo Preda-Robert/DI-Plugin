@@ -22,6 +22,26 @@
       {
         "command": "di-plugin.suggestRegistrations",
         "title": "DI: Suggest registrations for current file"
+      },
+      {
+        "command": "di-plugin.analyzeWorkspace",
+        "title": "DI: Analyze workspace"
+      },
+      {
+        "command": "di-plugin.suggestWorkspaceRegistrations",
+        "title": "DI: Suggest registrations for workspace"
+      },
+      {
+        "command": "di-plugin.suggestFactories",
+        "title": "DI: Suggest builders/factories for current file"
+      },
+      {
+        "command": "di-plugin.suggestWorkspaceFactories",
+        "title": "DI: Suggest builders/factories for workspace"
+      },
+      {
+        "command": "di-plugin.generateWorkspaceFactories",
+        "title": "DI: Generate builders/factories files (workspace)"
       }
     ]
   },

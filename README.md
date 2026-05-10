@@ -11,6 +11,11 @@
 - **Diagnostics:** opening or editing a C# file shows:
   - Informational hints on constructors with their dependency list.
   - **Warnings** for DI issues: concrete types in constructors (prefer interfaces) and circular dependencies within the file.
+- **Workspace commands:**
+  - `DI: Analyze workspace`
+  - `DI: Suggest registrations for workspace`
+  - `DI: Suggest builders/factories for workspace`
+  - `DI: Generate builders/factories files (workspace)` -> writes files into `GeneratedDI/`.
 
 ## How to run
 
@@ -22,6 +27,12 @@ Press **F5** in VS Code to launch the Extension Development Host. Open a `.cs` f
 
 - Run **Ctrl+Shift+P** → **"DI: Analyze current file"** to see the full report in the Output panel.
 - Constructors are underlined with an informational message listing their dependencies.
+
+For workspace-level testing, open one of:
+- `sample/BaseSample`
+- `sample/BuilderFactorySample`
+
+Then run workspace commands from Command Palette.
 
 ## Roadmap
 

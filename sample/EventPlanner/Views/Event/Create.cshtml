@@ -1,0 +1,44 @@
+﻿@model EventPlanner.Models.Event
+
+<h2>@ViewContext.RouteData.Values["action"] Event</h2>
+<form asp-action="@ViewContext.RouteData.Values["action"]" method="post" enctype="multipart/form-data">
+
+  <div class="form-group">
+    <label asp-for="ImagePath">Upload Event Image</label>
+    <input type="file" name="ImageFile" class="form-control" />
+  </div>
+  <div class="form-group">
+    <label asp-for="Title"></label>
+    <input asp-for="Title" class="form-control" />
+  </div>
+  <div class="form-group">
+    <label asp-for="Description"></label>
+    <textarea asp-for="Description" class="form-control"></textarea>
+  </div>
+  <div class="form-group">
+    <label asp-for="Date"></label>
+    <input asp-for="Date" class="form-control" type="date" />
+  </div>
+  <div class="form-group">
+    <label asp-for="Location"></label>
+    <input asp-for="Location" class="form-control" />
+  </div>
+  <div class="form-group">
+    <label asp-for="HostId">Host</label>
+    <select asp-for="HostId" asp-items="ViewBag.Hosts" class="form-control"></select>
+  </div>
+
+
+  <div class="form-group">
+    <label for="Guests">Guests</label>
+    <div>
+      @foreach (var guest in ViewBag.Guests as List<EventPlanner.Models.Guest>)
+      {
+        <div>
+          <input type="checkbox" name="SelectedGuests" value="@guest.GuestId" /> @guest.Name
+        </div>
+      }
+    </div>
+  </div>
+  <button type="submit" class="btn btn-success">Save</button>
+</form>

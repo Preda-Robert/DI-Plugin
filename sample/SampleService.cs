@@ -52,9 +52,6 @@ namespace SampleApp
     {
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddScoped<ILogger, ConsoleLogger>();
-            services.AddScoped<IEmailSender, SmtpEmailSender>();
-            services.AddTransient<ProductRepository>();
         }
     }
 
