@@ -55,11 +55,15 @@ interface WorkspaceCSharpFile {
 
 interface WorkspaceDiSummary {
   files: WorkspaceCSharpFile[];
-  constructors: Array<ConstructorInfo & { fileName: string }>;
+  constructors: Array<ConstructorInfo & { fileName: string; relativePath: string }>;
   registeredTypes: Set<string>;
   interfaceToImpl: Map<string, Set<string>>;
   typeToNamespace: Map<string, string>;
   hasCompositionRoot: boolean;
+  /** True if workspace looks like ASP.NET Core MVC (controllers resolved by framework). */
+  aspNetMvcHost: boolean;
+  /** Class base names that are generic (e.g. `Repository` from `Repository<T>`) — do not register as closed types. */
+  genericClassNames: Set<string>;
 }
 
 interface GeneratedFile {
@@ -102,6 +106,99 @@ function collectRegisteredTypes(source: string): Set<string> {
   return registeredTypes;
 }
 
+/** Merge DI registration hints from typical ASP.NET Core + MS.Ext.DI patterns. */
+function collectExtendedRegistrationTypes(source: string): Set<string> {
+  const types = collectRegisteredTypes(source);
+
+  // builder.Services / services — same patterns as collectRegisteredTypes already scanned
+
+  // AddDbContext<ApplicationDbContext>(...) registers context + options
+  const addDb = /AddDbContext\s*<\s*([A-Za-z0-9_]+)\s*>/g;
+  let dbMatch: RegExpExecArray | null;
+  while ((dbMatch = addDb.exec(source)) !== null) {
+    const ctx = dbMatch[1].trim();
+    types.add(ctx);
+    types.add(`DbContextOptions<${ctx}>`);
+  }
+
+  // new ServiceDescriptor(typeof(IThing), typeof(Thing), ...)
+  const sd =
+    /typeof\s*\(\s*([A-Za-z0-9_]+)\s*\)\s*,\s*typeof\s*\(\s*([A-Za-z0-9_]+)\s*\)/gs;
+  let sdMatch: RegExpExecArray | null;
+  while ((sdMatch = sd.exec(source)) !== null) {
+    types.add(sdMatch[1].trim());
+    types.add(sdMatch[2].trim());
+  }
+
+  // AddIdentity<TUser, TRole>() registers identity managers for TUser / TRole
+  const idMatch = source.match(/AddIdentity\s*<\s*([^,>]+)\s*,\s*([^>]+)\s*>/);
+  if (idMatch) {
+    const user = idMatch[1].trim();
+    const role = idMatch[2].trim();
+    types.add(`UserManager<${user}>`);
+    types.add(`SignInManager<${user}>`);
+    types.add(`RoleManager<${role}>`);
+  }
+
+  return types;
+}
+
+function documentRelativePath(uri: vscode.Uri): string {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) return uri.fsPath;
+  return vscode.workspace.asRelativePath(uri, false);
+}
+
+function isLikelyTestPath(relativePath: string): boolean {
+  const p = relativePath.replace(/\\/g, "/").toLowerCase();
+  if (p.includes("/tests/")) return true;
+  const base = p.split("/").pop() ?? "";
+  return /tests\.cs$/i.test(base) || /_tests\.cs$/i.test(base);
+}
+
+function isLikelyMvcControllerClass(className: string): boolean {
+  return className.endsWith("Controller");
+}
+
+function isImplicitFrameworkDependency(paramType: string, summary: WorkspaceDiSummary): boolean {
+  const t = paramType.trim();
+  if (t === "IWebHostEnvironment" || t === "IHostEnvironment") return true;
+  if (t === "IHostApplicationLifetime" || t === "IConfiguration") return true;
+  if (t === "ILogger" || t.startsWith("ILogger<")) return true;
+  if (t.startsWith("IOptions<") || t.startsWith("IOptionsSnapshot<")) return true;
+  if (summary.aspNetMvcHost && isLikelyMvcControllerClass(t)) return false;
+  return false;
+}
+
+function isRegisteredOrImplicit(paramType: string, summary: WorkspaceDiSummary): boolean {
+  if (summary.registeredTypes.has(paramType)) return true;
+  return isImplicitFrameworkDependency(paramType, summary);
+}
+
+function shouldSuggestConcreteRegistration(
+  className: string,
+  relativePath: string,
+  summary: WorkspaceDiSummary
+): boolean {
+  if (!className) return false;
+  if (summary.genericClassNames.has(className)) return false;
+  if (isLikelyTestPath(relativePath)) return false;
+  if (/Tests$/i.test(className)) return false;
+  if (summary.aspNetMvcHost && isLikelyMvcControllerClass(className)) return false;
+  return true;
+}
+
+function shouldAnalyzeConstructorForMissing(
+  className: string,
+  relativePath: string,
+  summary: WorkspaceDiSummary
+): boolean {
+  if (isLikelyTestPath(relativePath)) return false;
+  if (/Tests$/i.test(className)) return false;
+  if (summary.aspNetMvcHost && isLikelyMvcControllerClass(className)) return false;
+  return true;
+}
+
 async function getWorkspaceCSharpFiles(): Promise<WorkspaceCSharpFile[]> {
   const uris = await vscode.workspace.findFiles("**/*.cs", "**/{bin,obj,node_modules,.git}/**", 200);
   const docs = await Promise.all(uris.map((uri) => vscode.workspace.openTextDocument(uri)));
@@ -112,19 +209,35 @@ async function getWorkspaceCSharpFiles(): Promise<WorkspaceCSharpFile[]> {
 
 async function buildWorkspaceSummary(): Promise<WorkspaceDiSummary> {
   const files = await getWorkspaceCSharpFiles();
-  const constructors: Array<ConstructorInfo & { fileName: string }> = [];
+  const constructors: Array<ConstructorInfo & { fileName: string; relativePath: string }> = [];
   const registeredTypes = new Set<string>();
   const interfaceToImpl = new Map<string, Set<string>>();
   const typeToNamespace = new Map<string, string>();
   let hasCompositionRoot = false;
+  let aspNetMvcHost = false;
+  const genericClassNames = new Set<string>();
 
   for (const file of files) {
+    const relativePath = documentRelativePath(file.doc.uri);
+    const src = file.source;
+    const genMatch = /\bclass\s+(\w+)\s*</g;
+    let gm: RegExpExecArray | null;
+    while ((gm = genMatch.exec(src)) !== null) {
+      genericClassNames.add(gm[1]);
+    }
     const analysis = analyzeCSharp(file.source);
     for (const c of analysis.constructors) {
-      constructors.push({ ...c, fileName: file.doc.fileName });
+      constructors.push({ ...c, fileName: file.doc.fileName, relativePath });
     }
-    for (const type of collectRegisteredTypes(file.source)) {
+    for (const type of collectExtendedRegistrationTypes(file.source)) {
       registeredTypes.add(type);
+    }
+    if (
+      /\bWebApplication\.CreateBuilder\b/.test(src) ||
+      /\bAddControllersWithViews\s*\(/.test(src) ||
+      /\bAddControllers\s*\(/.test(src)
+    ) {
+      aspNetMvcHost = true;
     }
     for (const [iface, impls] of collectInterfaceImplementations(file.source)) {
       if (!interfaceToImpl.has(iface)) {
@@ -155,6 +268,8 @@ async function buildWorkspaceSummary(): Promise<WorkspaceDiSummary> {
     interfaceToImpl,
     typeToNamespace,
     hasCompositionRoot,
+    aspNetMvcHost,
+    genericClassNames,
   };
 }
 
@@ -233,21 +348,55 @@ function extractNamespace(source: string): string | undefined {
 }
 
 function getBestNamespace(summary: WorkspaceDiSummary): string {
-  const counts = new Map<string, number>();
+  const rootCounts = new Map<string, number>();
   for (const file of summary.files) {
     const ns = extractNamespace(file.source);
     if (!ns) continue;
-    counts.set(ns, (counts.get(ns) ?? 0) + 1);
+    const root = ns.split(".")[0];
+    rootCounts.set(root, (rootCounts.get(root) ?? 0) + 1);
   }
-  let best = "GeneratedDI";
+  let bestRoot = "GeneratedDI";
   let bestCount = -1;
-  for (const [ns, count] of counts.entries()) {
+  for (const [root, count] of rootCounts.entries()) {
     if (count > bestCount) {
-      best = ns;
+      bestRoot = root;
       bestCount = count;
     }
   }
-  return `${best}.DI`;
+  return `${bestRoot}.DI`;
+}
+
+function isInTestNamespace(typeName: string, summary: WorkspaceDiSummary): boolean {
+  const ns = summary.typeToNamespace.get(typeName);
+  return ns ? /\.Tests(\.|$)/i.test(ns) : false;
+}
+
+function isImplementationOfMappedInterface(className: string, summary: WorkspaceDiSummary): boolean {
+  for (const impls of summary.interfaceToImpl.values()) {
+    if (impls.has(className)) return true;
+  }
+  return false;
+}
+
+function buildWorkspaceRegistrationSuggestions(summary: WorkspaceDiSummary): string[] {
+  const suggestions = new Set<string>();
+  for (const [iface, impls] of summary.interfaceToImpl.entries()) {
+    for (const impl of impls) {
+      if (isInTestNamespace(impl, summary)) continue;
+      if (summary.genericClassNames.has(impl)) continue;
+      if (summary.registeredTypes.has(iface)) continue;
+      suggestions.add(`services.AddScoped<${iface}, ${impl}>();`);
+    }
+  }
+  for (const c of summary.constructors) {
+    if (!c.className) continue;
+    const ext = c as ConstructorInfo & { fileName: string; relativePath: string };
+    if (!shouldSuggestConcreteRegistration(c.className, ext.relativePath, summary)) continue;
+    if (isImplementationOfMappedInterface(c.className, summary)) continue;
+    if (summary.registeredTypes.has(c.className)) continue;
+    suggestions.add(`services.AddTransient<${c.className}>();`);
+  }
+  return Array.from(suggestions).sort();
 }
 
 function shouldGenerateFactory(c: ConstructorInfo, interfaceNames: Set<string>): boolean {
@@ -303,21 +452,60 @@ function buildFactoryFileContent(c: ConstructorInfo, namespaceName: string, summ
   return lines.join("\n");
 }
 
+/** Pull simple type tokens from `...<A, B>...` fragments in generated registration lines. */
+function extractTypesFromRegistrationLines(registrationLines: string[]): Set<string> {
+  const types = new Set<string>();
+  for (const line of registrationLines) {
+    const re = /<([^>]+)>/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(line)) !== null) {
+      for (const part of m[1].split(",")) {
+        const t = part.trim();
+        if (t) types.add(t);
+      }
+    }
+  }
+  return types;
+}
+
 function buildAppBuilderFileContent(
   summary: WorkspaceDiSummary,
   namespaceName: string,
   factoryTargets: ConstructorInfo[]
 ): string {
+  const registrations: string[] = [];
+  for (const [iface, impls] of summary.interfaceToImpl.entries()) {
+    for (const impl of impls) {
+      if (isInTestNamespace(impl, summary)) continue;
+      if (summary.genericClassNames.has(impl)) continue;
+      if (summary.registeredTypes.has(iface)) continue;
+      registrations.push(`            services.AddScoped<${iface}, ${impl}>();`);
+    }
+  }
+  for (const c of summary.constructors) {
+    if (!c.className) continue;
+    if (!shouldSuggestConcreteRegistration(c.className, c.relativePath, summary)) continue;
+    if (summary.registeredTypes.has(c.className)) continue;
+    if (isImplementationOfMappedInterface(c.className, summary)) continue;
+    registrations.push(`            services.AddScoped<${c.className}>();`);
+  }
+  for (const c of factoryTargets) {
+    registrations.push(`            services.AddScoped<${c.className}Factory>();`);
+  }
+
+  const uniqueRegs = Array.from(new Set(registrations)).sort();
+
+  const typesForUsings = extractTypesFromRegistrationLines(uniqueRegs);
+  for (const c of factoryTargets) {
+    if (c.className) typesForUsings.add(c.className);
+    for (const p of c.parameters) typesForUsings.add(p.type);
+  }
+
   const lines: string[] = [
     "using System;",
     "using Microsoft.Extensions.DependencyInjection;",
   ];
-  const allTypes = new Set<string>();
-  for (const c of summary.constructors) {
-    if (c.className) allTypes.add(c.className);
-    for (const p of c.parameters) allTypes.add(p.type);
-  }
-  for (const ns of getRequiredUsingsForTypes(Array.from(allTypes), summary)) {
+  for (const ns of getRequiredUsingsForTypes(Array.from(typesForUsings), summary)) {
     lines.push(`using ${ns};`);
   }
   lines.push("");
@@ -329,20 +517,14 @@ function buildAppBuilderFileContent(
   lines.push("        public static IServiceProvider Build()");
   lines.push("        {");
   lines.push("            var services = new ServiceCollection();");
-  const registrations: string[] = [];
-  for (const [iface, impls] of summary.interfaceToImpl.entries()) {
-    for (const impl of impls) {
-      registrations.push(`            services.AddScoped<${iface}, ${impl}>();`);
-    }
+  if (uniqueRegs.length === 0 && factoryTargets.length === 0) {
+    lines.push(
+      "            // No inferred DI registrations to add (workspace already wired or nothing matched heuristics)."
+    );
   }
-  for (const c of summary.constructors) {
-    if (!c.className) continue;
-    registrations.push(`            services.AddScoped<${c.className}>();`);
+  for (const line of uniqueRegs) {
+    lines.push(line);
   }
-  for (const c of factoryTargets) {
-    registrations.push(`            services.AddScoped<${c.className}Factory>();`);
-  }
-  for (const line of Array.from(new Set(registrations)).sort()) lines.push(line);
   lines.push("            return services.BuildServiceProvider();");
   lines.push("        }");
   lines.push("    }");
@@ -359,6 +541,8 @@ function buildWorkspaceGeneratedFiles(summary: WorkspaceDiSummary): GeneratedFil
 
   for (const c of summary.constructors) {
     if (!shouldGenerateFactory(c, interfaceNames)) continue;
+    const ext = c as ConstructorInfo & { fileName: string; relativePath: string };
+    if (!shouldSuggestConcreteRegistration(ext.className, ext.relativePath, summary)) continue;
     factoryTargets.push(c);
     generated.push({
       fileName: `${c.className}Factory.cs`,
@@ -622,6 +806,14 @@ export function activate(context: vscode.ExtensionContext) {
 
       outputChannel.appendLine(`C# files scanned: ${summary.files.length}`);
       outputChannel.appendLine(`Constructors found: ${summary.constructors.length}`);
+      if (summary.aspNetMvcHost) {
+        outputChannel.appendLine(
+          "ASP.NET Core hosting detected: missing-registration checks skip MVC controllers and common framework services (ILogger<>, IWebHostEnvironment, Identity managers when AddIdentity is present, DbContext when AddDbContext is present)."
+        );
+      }
+      outputChannel.appendLine(
+        "Test projects (paths containing /Tests/ or *Tests.cs) are excluded from missing-registration analysis."
+      );
       outputChannel.appendLine("");
 
       const primitiveTypes = new Set([
@@ -631,11 +823,14 @@ export function activate(context: vscode.ExtensionContext) {
 
       const missing: string[] = [];
       for (const c of summary.constructors) {
+        const ext = c as ConstructorInfo & { fileName: string; relativePath: string };
+        if (!shouldSuggestConcreteRegistration(c.className, ext.relativePath, summary)) continue;
         for (const p of c.parameters) {
           if (!p.type || p.type === "?" || primitiveTypes.has(p.type)) continue;
-          if (!summary.registeredTypes.has(p.type)) {
-            missing.push(`${p.type} required by ${c.className}(...) in ${vscode.workspace.asRelativePath(c.fileName)}`);
-          }
+          if (isRegisteredOrImplicit(p.type, summary)) continue;
+          missing.push(
+            `${p.type} required by ${c.className}(...) in ${vscode.workspace.asRelativePath(c.fileName)}`
+          );
         }
       }
 
@@ -669,22 +864,16 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      const suggestions = new Set<string>();
-      for (const [iface, impls] of summary.interfaceToImpl.entries()) {
-        for (const impl of impls) {
-          suggestions.add(`services.AddScoped<${iface}, ${impl}>();`);
-        }
-      }
-      for (const c of summary.constructors) {
-        if (!c.className) continue;
-        const covered = Array.from(summary.interfaceToImpl.values()).some((impls) => impls.has(c.className));
-        if (!covered) {
-          suggestions.add(`services.AddTransient<${c.className}>();`);
-        }
-      }
+      const suggestions = buildWorkspaceRegistrationSuggestions(summary);
 
-      for (const line of Array.from(suggestions).sort()) {
-        outputChannel.appendLine(`  ${line}`);
+      if (suggestions.length === 0) {
+        outputChannel.appendLine(
+          "  (No lines to suggest: registrations in Program/Startup already cover inferred bindings, or nothing matched heuristics.)"
+        );
+      } else {
+        for (const line of suggestions) {
+          outputChannel.appendLine(`  ${line}`);
+        }
       }
       outputChannel.show();
     }

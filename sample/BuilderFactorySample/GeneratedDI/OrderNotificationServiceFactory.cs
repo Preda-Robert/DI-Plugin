@@ -1,13 +1,19 @@
-using ShopApp;
+using System;
+using Microsoft.Extensions.DependencyInjection;
 using ShopApp.Core;
-using ShopApp.Infrastructure;
-using ShopApp.Runner;
 using ShopApp.Services;
 
-namespace ShopApp.Infrastructure.Generated
+namespace ShopApp.DI.Generated
 {
     public sealed class OrderNotificationServiceFactory
     {
-        public OrderNotificationService Create(ILogger logger, ITemplateEngine templateEngine, IEmailSender emailSender, IClock clock) => new OrderNotificationService(logger, templateEngine, emailSender, clock);
+        private readonly IServiceProvider _provider;
+
+        public OrderNotificationServiceFactory(IServiceProvider provider)
+        {
+            _provider = provider;
+        }
+
+        public OrderNotificationService Create() => new OrderNotificationService(_provider.GetRequiredService<ILogger>(), _provider.GetRequiredService<ITemplateEngine>(), _provider.GetRequiredService<IEmailSender>(), _provider.GetRequiredService<IClock>());
     }
 }

@@ -1,22 +1,21 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
-using ShopApp;
 using ShopApp.Core;
 using ShopApp.Infrastructure;
-using ShopApp.Runner;
 using ShopApp.Services;
 
-namespace ShopApp.Infrastructure.Generated
+namespace ShopApp.DI.Generated
 {
     public static class AppBuilder
     {
+        // NOTE: Generated AppBuilder is intended to replace/supersede manual CompositionRoot wiring.
         public static IServiceProvider Build()
         {
             var services = new ServiceCollection();
-            services.AddScoped<IClock, SystemClock>();
+            services.AddScoped<ConcreteMailerService>();
             services.AddScoped<IEmailSender, SmtpEmailSender>();
-            services.AddScoped<ILogger, ConsoleLogger>();
-            services.AddScoped<ITemplateEngine, BasicTemplateEngine>();
+            services.AddScoped<OrderNotificationService>();
+            services.AddScoped<OrderNotificationServiceFactory>();
             return services.BuildServiceProvider();
         }
     }
