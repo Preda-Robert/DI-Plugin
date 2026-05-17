@@ -1,0 +1,12 @@
+[
+  {"NumberOfServings": 1, "Description": "1 portion"},
+  {"NumberOfServings": 2, "Description": "2 portions"},
+  {"NumberOfServings": 3, "Description": "3 portions"},
+  {"NumberOfServings": 4, "Description": "4 portions"},
+  {"NumberOfServings": 5, "Description": "5 portions"},
+  {"NumberOfServings": 6, "Description": "6 portions"},
+  {"NumberOfServings": 7, "Description": "7 portions"},
+  {"NumberOfServings": 8, "Description": "8 portions"},
+  {"NumberOfServings": 9, "Description": "9 portions"},
+  {"NumberOfServings": 10, "Description": "10 portions"}
+]

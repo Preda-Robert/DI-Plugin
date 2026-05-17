@@ -1,0 +1,426 @@
+[
+  {
+    "name": "Grilled Sirloin Steak with Rosemary",
+    "description": "A juicy sirloin steak grilled to perfection with a rosemary and garlic marinade.",
+    "cookingTime": 20,
+    "photoUrl": null,
+    "rating": 4.5,
+    "difficulty": "Medium",
+    "servingType": {
+      "numberOfServings": 1,
+      "description": "Serves one person for a hearty meal."
+    },
+    "dateAdded": "2025-05-14T12:52:00Z",
+    "cookware": [
+      {
+        "name": "Grill Pan",
+        "description": "A ridged grill pan for indoor grilling of steaks or vegetables.",
+        "photoUrl": null
+      },
+      {
+        "name": "Chef's Knife",
+        "description": "A 8-inch stainless steel chef's knife for chopping vegetables and meats.",
+        "photoUrl": null
+      }
+    ],
+    "instructions": [
+      {
+        "description": "In a small bowl, mix olive oil, minced garlic, chopped rosemary, salt, and black pepper to create a marinade.",
+        "instructionIndex": 1
+      },
+      {
+        "description": "Rub the marinade over the sirloin steak and let it sit for 10 minutes.",
+        "instructionIndex": 2
+      },
+      {
+        "description": "Heat the grill pan over medium-high heat until hot.",
+        "instructionIndex": 3
+      },
+      {
+        "description": "Grill the steak for 4-5 minutes per side for medium doneness, or adjust to your preference.",
+        "instructionIndex": 4
+      },
+      {
+        "description": "Remove the steak from the pan, let it rest for 3 minutes, then slice and serve.",
+        "instructionIndex": 5
+      }
+    ],
+    "ingredients": [
+      {
+        "quantity": 1,
+        "ingredient": {
+          "name": "Sirloin Steak",
+          "category": { "name": "Meats" },
+          "isAllergen": false,
+          "allergy": null,
+          "measurementType": "Piece",
+          "calories": 243.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 2,
+        "ingredient": {
+          "name": "Garlic",
+          "category": { "name": "Vegetables" },
+          "isAllergen": true,
+          "allergy": { "name": "Garlic" },
+          "measurementType": "Clove",
+          "calories": 4.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 1,
+        "ingredient": {
+          "name": "Rosemary",
+          "category": { "name": "Herbs" },
+          "isAllergen": false,
+          "allergy": null,
+          "measurementType": "Teaspoon",
+          "calories": 131.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 2,
+        "ingredient": {
+          "name": "Olive Oil",
+          "category": { "name": "Oils" },
+          "isAllergen": false,
+          "allergy": null,
+          "measurementType": "Tablespoon",
+          "calories": 119.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 1,
+        "ingredient": {
+          "name": "Salt",
+          "category": { "name": "Spices" },
+          "isAllergen": false,
+          "allergy": null,
+          "measurementType": "Pinch",
+          "calories": 0.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 1,
+        "ingredient": {
+          "name": "Black Pepper",
+          "category": { "name": "Spices" },
+          "isAllergen": false,
+          "allergy": null,
+          "measurementType": "Pinch",
+          "calories": 0.0,
+          "photoUrl": null
+        }
+      }
+    ]
+  },
+  {
+    "name": "Hearty Vegetable Soup",
+    "description": "A comforting soup packed with carrots, potatoes, leeks, and kale in a flavorful chicken broth.",
+    "cookingTime": 45,
+    "photoUrl": null,
+    "rating": 4.0,
+    "difficulty": "Easy",
+    "servingType": {
+      "numberOfServings": 4,
+      "description": "Serves a family of four as a warm meal."
+    },
+    "dateAdded": "2025-05-14T12:52:00Z",
+    "cookware": [
+      {
+        "name": "Stock Pot",
+        "description": "An 8-quart stainless steel pot ideal for making large batches of soup or broth.",
+        "photoUrl": null
+      },
+      {
+        "name": "Wooden Spoon",
+        "description": "A sturdy wooden spoon for stirring soups, sauces, or batters.",
+        "photoUrl": null
+      }
+    ],
+    "instructions": [
+      {
+        "description": "Chop carrots, potatoes, and leeks into bite-sized pieces.",
+        "instructionIndex": 1
+      },
+      {
+        "description": "Heat olive oil in the stock pot over medium heat, then add leeks and sauté for 5 minutes until softened.",
+        "instructionIndex": 2
+      },
+      {
+        "description": "Add carrots, potatoes, and chicken broth, then bring to a boil.",
+        "instructionIndex": 3
+      },
+      {
+        "description": "Reduce heat, add thyme and salt, and simmer for 25 minutes until vegetables are tender.",
+        "instructionIndex": 4
+      },
+      {
+        "description": "Stir in chopped kale and cook for another 5 minutes.",
+        "instructionIndex": 5
+      },
+      {
+        "description": "Serve hot, using the wooden spoon to ladle into bowls.",
+        "instructionIndex": 6
+      }
+    ],
+    "ingredients": [
+      {
+        "quantity": 2,
+        "ingredient": {
+          "name": "Carrot",
+          "category": { "name": "Vegetables" },
+          "isAllergen": false,
+          "allergy": null,
+          "measurementType": "Piece",
+          "calories": 25.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 2,
+        "ingredient": {
+          "name": "Potato",
+          "category": { "name": "Vegetables" },
+          "isAllergen": false,
+          "allergy": null,
+          "measurementType": "Piece",
+          "calories": 77.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 1,
+        "ingredient": {
+          "name": "Leeks",
+          "category": { "name": "Vegetables" },
+          "isAllergen": true,
+          "allergy": { "name": "Onion" },
+          "measurementType": "Cup",
+          "calories": 61.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 1,
+        "ingredient": {
+          "name": "Kale",
+          "category": { "name": "Vegetables" },
+          "isAllergen": false,
+          "allergy": null,
+          "measurementType": "Cup",
+          "calories": 33.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 4,
+        "ingredient": {
+          "name": "Chicken Broth",
+          "category": { "name": "Broths" },
+          "isAllergen": true,
+          "allergy": { "name": "Chicken" },
+          "measurementType": "Cup",
+          "calories": 15.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 1,
+        "ingredient": {
+          "name": "Olive Oil",
+          "category": { "name": "Oils" },
+          "isAllergen": false,
+          "allergy": null,
+          "measurementType": "Tablespoon",
+          "calories": 119.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 1,
+        "ingredient": {
+          "name": "Thyme",
+          "category": { "name": "Herbs" },
+          "isAllergen": false,
+          "allergy": null,
+          "measurementType": "Teaspoon",
+          "calories": 276.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 1,
+        "ingredient": {
+          "name": "Salt",
+          "category": { "name": "Spices" },
+          "isAllergen": false,
+          "allergy": null,
+          "measurementType": "Pinch",
+          "calories": 0.0,
+          "photoUrl": null
+        }
+      }
+    ]
+  },
+  {
+    "name": "Maple Vanilla Cake",
+    "description": "A moist cake sweetened with maple syrup and flavored with vanilla, perfect for dessert.",
+    "cookingTime": 60,
+    "photoUrl": null,
+    "rating": 4.2,
+    "difficulty": "Medium",
+    "servingType": {
+      "numberOfServings": 6,
+      "description": "Serves a family of six for a sweet treat."
+    },
+    "dateAdded": "2025-05-14T12:52:00Z",
+    "cookware": [
+      {
+        "name": "Mixing Bowl (Large)",
+        "description": "A 5-quart stainless steel mixing bowl for doughs or salads.",
+        "photoUrl": null
+      },
+      {
+        "name": "Baking Dish",
+        "description": "A 9x13 glass baking dish for roasting vegetables or baking desserts.",
+        "photoUrl": null
+      },
+      {
+        "name": "Whisk",
+        "description": "A stainless steel whisk for blending sauces or beating eggs.",
+        "photoUrl": null
+      }
+    ],
+    "instructions": [
+      {
+        "description": "Preheat the oven to 350°F (175°C) and grease the baking dish.",
+        "instructionIndex": 1
+      },
+      {
+        "description": "In the mixing bowl, whisk together whole wheat flour, sugar, and baking powder.",
+        "instructionIndex": 2
+      },
+      {
+        "description": "In a separate bowl, beat the egg, then add melted butter, milk, maple syrup, and vanilla extract, mixing well.",
+        "instructionIndex": 3
+      },
+      {
+        "description": "Combine the wet and dry ingredients, stirring until just mixed.",
+        "instructionIndex": 4
+      },
+      {
+        "description": "Pour the batter into the baking dish and bake for 35-40 minutes, or until a toothpick comes out clean.",
+        "instructionIndex": 5
+      },
+      {
+        "description": "Let the cake cool for 10 minutes before serving.",
+        "instructionIndex": 6
+      }
+    ],
+    "ingredients": [
+      {
+        "quantity": 2,
+        "ingredient": {
+          "name": "Whole Wheat Flour",
+          "category": { "name": "Grains" },
+          "isAllergen": true,
+          "allergy": { "name": "Gluten" },
+          "measurementType": "Cup",
+          "calories": 407.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 0.5,
+        "ingredient": {
+          "name": "Sugar",
+          "category": { "name": "Sweeteners" },
+          "isAllergen": false,
+          "allergy": null,
+          "measurementType": "Cup",
+          "calories": 773.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 2,
+        "ingredient": {
+          "name": "Baking Powder",
+          "category": { "name": "Additives" },
+          "isAllergen": false,
+          "allergy": null,
+          "measurementType": "Teaspoon",
+          "calories": 2.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 1,
+        "ingredient": {
+          "name": "Chicken Egg",
+          "category": { "name": "Dairy" },
+          "isAllergen": true,
+          "allergy": { "name": "Eggs" },
+          "measurementType": "Piece",
+          "calories": 78.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 0.5,
+        "ingredient": {
+          "name": "Butter",
+          "category": { "name": "Dairy" },
+          "isAllergen": true,
+          "allergy": { "name": "Milk" },
+          "measurementType": "Cup",
+          "calories": 717.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 0.5,
+        "ingredient": {
+          "name": "Milk",
+          "category": { "name": "Dairy" },
+          "isAllergen": true,
+          "allergy": { "name": "Milk" },
+          "measurementType": "Cup",
+          "calories": 42.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 0.5,
+        "ingredient": {
+          "name": "Maple Syrup",
+          "category": { "name": "Sweeteners" },
+          "isAllergen": false,
+          "allergy": null,
+          "measurementType": "Cup",
+          "calories": 260.0,
+          "photoUrl": null
+        }
+      },
+      {
+        "quantity": 1,
+        "ingredient": {
+          "name": "Vanilla Extract",
+          "category": { "name": "Sweeteners" },
+          "isAllergen": false,
+          "allergy": null,
+          "measurementType": "Teaspoon",
+          "calories": 288.0,
+          "photoUrl": null
+        }
+      }
+    ]
+  }
+]

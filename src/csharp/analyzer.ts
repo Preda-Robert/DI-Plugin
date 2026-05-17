@@ -52,6 +52,9 @@ export interface CSharpDiAnalysis {
 const parser = new Parser();
 parser.setLanguage(CSharp);
 
+/** node-tree-sitter rejects sources at or above 32 KiB (EINVAL / "Invalid argument"). */
+const MAX_PARSE_SOURCE_LENGTH = 32767;
+
 function getText(source: string, node: Parser.SyntaxNode): string {
   return source.slice(node.startIndex, node.endIndex).trim();
 }
@@ -154,9 +157,34 @@ function findCycles(graph: Map<string, string[]>): string[][] {
   return cycles;
 }
 
+function emptyAnalysis(errors: string[]): CSharpDiAnalysis {
+  return {
+    constructors: [],
+    errors,
+    concreteTypeIssues: [],
+    circularDependencyIssues: [],
+    missingRegistrationIssues: [],
+  };
+}
+
 export function analyzeCSharp(source: string): CSharpDiAnalysis {
   const errors: string[] = [];
-  const tree = parser.parse(source);
+  if (source.length > MAX_PARSE_SOURCE_LENGTH) {
+    errors.push(
+      `File exceeds ${MAX_PARSE_SOURCE_LENGTH} character parse limit (${source.length} characters); constructor AST analysis skipped.`
+    );
+    return emptyAnalysis(errors);
+  }
+
+  let tree: Parser.Tree;
+  try {
+    tree = parser.parse(source);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    errors.push(`Failed to parse C# source: ${msg}`);
+    return emptyAnalysis(errors);
+  }
+
   const constructors: ConstructorInfo[] = [];
 
   if (tree.rootNode.hasError) {

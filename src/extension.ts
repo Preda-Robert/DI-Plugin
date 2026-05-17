@@ -64,6 +64,62 @@ interface WorkspaceDiSummary {
   aspNetMvcHost: boolean;
   /** Class base names that are generic (e.g. `Repository` from `Repository<T>`) — do not register as closed types. */
   genericClassNames: Set<string>;
+  /** Classes that are config/mapping/EF artifacts, not injectable application services. */
+  nonInjectableClassNames: Set<string>;
+}
+
+/** Framework/marker interfaces — implemented alongside service contracts but not DI keys. */
+const MARKER_SERVICE_INTERFACES = new Set([
+  "IDisposable",
+  "IAsyncDisposable",
+  "ICloneable",
+  "ISerializable",
+  "INotifyPropertyChanged",
+  "INotifyPropertyChanging",
+]);
+
+function isMarkerServiceInterface(interfaceName: string): boolean {
+  const base = interfaceName.split("<")[0].trim();
+  return MARKER_SERVICE_INTERFACES.has(base);
+}
+
+function shouldSuggestInterfaceRegistration(interfaceName: string): boolean {
+  return !isMarkerServiceInterface(interfaceName);
+}
+
+/** Base types that indicate a class is not registered via Add*<T>() directly. */
+function isNonInjectableBaseType(baseName: string): boolean {
+  const base = baseName.split("<")[0].trim();
+  return (
+    base === "Profile" ||
+    base === "Migration" ||
+    base === "DbContext" ||
+    base === "IdentityDbContext" ||
+    base === "Controller" ||
+    base === "ControllerBase" ||
+    base === "PageModel" ||
+    base === "RazorPage" ||
+    base === "ViewComponent"
+  );
+}
+
+function collectNonInjectableClassNames(source: string): Set<string> {
+  const names = new Set<string>();
+  const classRegex = /public\s+class\s+(\w+)(\s*:\s*([^{\r\n]+))?/g;
+  let match: RegExpExecArray | null;
+  while ((match = classRegex.exec(source)) !== null) {
+    const className = match[1];
+    const bases = match[3];
+    if (!bases) continue;
+    for (const rawBase of bases.split(",")) {
+      const baseName = rawBase.split("<")[0].trim();
+      if (isNonInjectableBaseType(baseName)) {
+        names.add(className);
+        break;
+      }
+    }
+  }
+  return names;
 }
 
 interface GeneratedFile {
@@ -83,6 +139,7 @@ function collectInterfaceImplementations(source: string): Map<string, Set<string
     for (const rawBase of bases.split(",")) {
       const baseName = rawBase.split("<")[0].trim();
       if (!/^I[A-Z]/.test(baseName)) continue;
+      if (!shouldSuggestInterfaceRegistration(baseName)) continue;
       if (!interfaceToImpl.has(baseName)) {
         interfaceToImpl.set(baseName, new Set());
       }
@@ -185,6 +242,7 @@ function shouldSuggestConcreteRegistration(
   if (isLikelyTestPath(relativePath)) return false;
   if (/Tests$/i.test(className)) return false;
   if (summary.aspNetMvcHost && isLikelyMvcControllerClass(className)) return false;
+  if (summary.nonInjectableClassNames.has(className)) return false;
   return true;
 }
 
@@ -201,10 +259,17 @@ function shouldAnalyzeConstructorForMissing(
 
 async function getWorkspaceCSharpFiles(): Promise<WorkspaceCSharpFile[]> {
   const uris = await vscode.workspace.findFiles("**/*.cs", "**/{bin,obj,node_modules,.git}/**", 200);
-  const docs = await Promise.all(uris.map((uri) => vscode.workspace.openTextDocument(uri)));
-  return docs
-    .filter((doc) => doc.languageId === "csharp")
-    .map((doc) => ({ doc, source: doc.getText() }));
+  const files: WorkspaceCSharpFile[] = [];
+  for (const uri of uris) {
+    try {
+      const doc = await vscode.workspace.openTextDocument(uri);
+      if (doc.languageId !== "csharp") continue;
+      files.push({ doc, source: doc.getText() });
+    } catch {
+      // Skip unreadable paths (e.g. invalid characters on some platforms).
+    }
+  }
+  return files;
 }
 
 async function buildWorkspaceSummary(): Promise<WorkspaceDiSummary> {
@@ -216,6 +281,7 @@ async function buildWorkspaceSummary(): Promise<WorkspaceDiSummary> {
   let hasCompositionRoot = false;
   let aspNetMvcHost = false;
   const genericClassNames = new Set<string>();
+  const nonInjectableClassNames = new Set<string>();
 
   for (const file of files) {
     const relativePath = documentRelativePath(file.doc.uri);
@@ -247,6 +313,9 @@ async function buildWorkspaceSummary(): Promise<WorkspaceDiSummary> {
         interfaceToImpl.get(iface)?.add(impl);
       }
     }
+    for (const name of collectNonInjectableClassNames(file.source)) {
+      nonInjectableClassNames.add(name);
+    }
 
     const ns = extractNamespace(file.source);
     if (ns) {
@@ -270,6 +339,7 @@ async function buildWorkspaceSummary(): Promise<WorkspaceDiSummary> {
     hasCompositionRoot,
     aspNetMvcHost,
     genericClassNames,
+    nonInjectableClassNames,
   };
 }
 
@@ -294,9 +364,11 @@ function createRegistrationEdit(doc: vscode.TextDocument, typeName: string): vsc
 function buildRegistrationSuggestions(constructors: ConstructorInfo[], source: string): string[] {
   const suggestions = new Set<string>();
   const interfaceToImpl = collectInterfaceImplementations(source);
+  const nonInjectable = collectNonInjectableClassNames(source);
 
   // 1) Suggest interface-to-implementation registrations where we see "class Impl : IFace"
   for (const [iface, impls] of interfaceToImpl.entries()) {
+    if (!shouldSuggestInterfaceRegistration(iface)) continue;
     for (const impl of impls) {
       suggestions.add(`services.AddScoped<${iface}, ${impl}>();`);
     }
@@ -314,6 +386,7 @@ function buildRegistrationSuggestions(constructors: ConstructorInfo[], source: s
   for (const c of constructors) {
     const type = c.className;
     if (!type || implUsedForInterface.has(type)) continue;
+    if (nonInjectable.has(type)) continue;
     suggestions.add(`services.AddTransient<${type}>();`);
   }
 
@@ -381,6 +454,7 @@ function isImplementationOfMappedInterface(className: string, summary: Workspace
 function buildWorkspaceRegistrationSuggestions(summary: WorkspaceDiSummary): string[] {
   const suggestions = new Set<string>();
   for (const [iface, impls] of summary.interfaceToImpl.entries()) {
+    if (!shouldSuggestInterfaceRegistration(iface)) continue;
     for (const impl of impls) {
       if (isInTestNamespace(impl, summary)) continue;
       if (summary.genericClassNames.has(impl)) continue;
@@ -475,6 +549,7 @@ function buildAppBuilderFileContent(
 ): string {
   const registrations: string[] = [];
   for (const [iface, impls] of summary.interfaceToImpl.entries()) {
+    if (!shouldSuggestInterfaceRegistration(iface)) continue;
     for (const impl of impls) {
       if (isInTestNamespace(impl, summary)) continue;
       if (summary.genericClassNames.has(impl)) continue;
@@ -602,6 +677,11 @@ class DiCodeActionProvider implements vscode.CodeActionProvider {
   }
 }
 
+function safePosition(doc: vscode.TextDocument, offset: number): vscode.Position {
+  const len = doc.getText().length;
+  return doc.positionAt(Math.max(0, Math.min(offset, len)));
+}
+
 function analyzeCSharpDocument(
   doc: vscode.TextDocument,
   collection: vscode.DiagnosticCollection
@@ -612,14 +692,35 @@ function analyzeCSharpDocument(
   const diagnostics: vscode.Diagnostic[] = [];
 
   const source = doc.getText();
+  let analysis: ReturnType<typeof analyzeCSharp>;
+  try {
+    analysis = analyzeCSharp(source);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    collection.set(uri, [
+      {
+        range: new vscode.Range(0, 0, 0, 0),
+        message: `DI: Analysis failed: ${msg}`,
+        severity: vscode.DiagnosticSeverity.Warning,
+        source: DIAGNOSTIC_COLLECTION,
+      },
+    ]);
+    return;
+  }
   const { constructors, errors, concreteTypeIssues, circularDependencyIssues, missingRegistrationIssues } =
-    analyzeCSharp(source);
+    analysis;
+
+  for (const err of errors) {
+    diagnostics.push({
+      range: new vscode.Range(0, 0, 0, 0),
+      message: err,
+      severity: vscode.DiagnosticSeverity.Warning,
+      source: DIAGNOSTIC_COLLECTION,
+    });
+  }
 
   for (const c of constructors) {
-    const range = new vscode.Range(
-      doc.positionAt(c.startIndex),
-      doc.positionAt(c.endIndex)
-    );
+    const range = new vscode.Range(safePosition(doc, c.startIndex), safePosition(doc, c.endIndex));
     const depList = c.parameters.map((p) => `${p.type} {${p.name}}`).join(", ");
     const message =
       c.parameters.length === 0
@@ -635,7 +736,7 @@ function analyzeCSharpDocument(
 
   for (const issue of concreteTypeIssues) {
     diagnostics.push({
-      range: new vscode.Range(doc.positionAt(issue.startIndex), doc.positionAt(issue.endIndex)),
+      range: new vscode.Range(safePosition(doc, issue.startIndex), safePosition(doc, issue.endIndex)),
       message: `DI: Prefer interface over concrete type "${issue.paramType}".`,
       severity: vscode.DiagnosticSeverity.Warning,
       source: DIAGNOSTIC_COLLECTION,
@@ -654,17 +755,8 @@ function analyzeCSharpDocument(
 
   for (const issue of missingRegistrationIssues) {
     diagnostics.push({
-      range: new vscode.Range(doc.positionAt(issue.startIndex), doc.positionAt(issue.endIndex)),
+      range: new vscode.Range(safePosition(doc, issue.startIndex), safePosition(doc, issue.endIndex)),
       message: `DI: No Add*(<${issue.paramType}, ...>) registration found in this file.`,
-      severity: vscode.DiagnosticSeverity.Warning,
-      source: DIAGNOSTIC_COLLECTION,
-    });
-  }
-
-  for (const err of errors) {
-    diagnostics.push({
-      range: new vscode.Range(0, 0, 0, 0),
-      message: err,
       severity: vscode.DiagnosticSeverity.Warning,
       source: DIAGNOSTIC_COLLECTION,
     });

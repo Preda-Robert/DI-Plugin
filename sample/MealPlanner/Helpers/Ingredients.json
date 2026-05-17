@@ -1,0 +1,596 @@
+[
+  {
+    "name": "Peanuts",
+    "category": { "name": "Nuts" },
+    "isAllergen": true,
+    "allergy": { "name": "Peanuts" },
+    "measurementType": "Cup",
+    "calories": 567.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Almonds",
+    "category": { "name": "Nuts" },
+    "isAllergen": true,
+    "allergy": { "name": "Tree Nuts" },
+    "measurementType": "Ounce",
+    "calories": 579.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Whole Milk",
+    "category": { "name": "Dairy" },
+    "isAllergen": true,
+    "allergy": { "name": "Milk" },
+    "measurementType": "Cup",
+    "calories": 149.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Chicken Egg",
+    "category": { "name": "Eggs" },
+    "isAllergen": true,
+    "allergy": { "name": "Eggs" },
+    "measurementType": "Piece",
+    "calories": 68.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Salmon",
+    "category": { "name": "Seafood" },
+    "isAllergen": true,
+    "allergy": { "name": "Fish" },
+    "measurementType": "Ounce",
+    "calories": 206.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Shrimp",
+    "category": { "name": "Seafood" },
+    "isAllergen": true,
+    "allergy": { "name": "Shellfish" },
+    "measurementType": "Ounce",
+    "calories": 99.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Soybeans",
+    "category": { "name": "Legumes" },
+    "isAllergen": true,
+    "allergy": { "name": "Soy" },
+    "measurementType": "Cup",
+    "calories": 446.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Wheat Flour",
+    "category": { "name": "Grains" },
+    "isAllergen": true,
+    "allergy": { "name": "Wheat" },
+    "measurementType": "Cup",
+    "calories": 455.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Sesame Seeds",
+    "category": { "name": "Seeds" },
+    "isAllergen": true,
+    "allergy": { "name": "Sesame" },
+    "measurementType": "Tablespoon",
+    "calories": 52.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Mustard Seeds",
+    "category": { "name": "Spices" },
+    "isAllergen": true,
+    "allergy": { "name": "Mustard" },
+    "measurementType": "Teaspoon",
+    "calories": 10.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Celery",
+    "category": { "name": "Vegetables" },
+    "isAllergen": true,
+    "allergy": { "name": "Celery" },
+    "measurementType": "Cup",
+    "calories": 16.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Lupin Flour",
+    "category": { "name": "Legumes" },
+    "isAllergen": true,
+    "allergy": { "name": "Lupin" },
+    "measurementType": "Cup",
+    "calories": 370.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Sulfite Preservative",
+    "category": { "name": "Preservatives" },
+    "isAllergen": true,
+    "allergy": { "name": "Sulfites" },
+    "measurementType": "Pinch",
+    "calories": 0.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Cornmeal",
+    "category": { "name": "Grains" },
+    "isAllergen": true,
+    "allergy": { "name": "Corn" },
+    "measurementType": "Cup",
+    "calories": 442.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Yeast",
+    "category": { "name": "Fermented Ingredients" },
+    "isAllergen": true,
+    "allergy": { "name": "Yeast" },
+    "measurementType": "Teaspoon",
+    "calories": 12.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Garlic",
+    "category": { "name": "Vegetables" },
+    "isAllergen": true,
+    "allergy": { "name": "Garlic" },
+    "measurementType": "Clove",
+    "calories": 4.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Onion",
+    "category": { "name": "Vegetables" },
+    "isAllergen": true,
+    "allergy": { "name": "Onion" },
+    "measurementType": "Cup",
+    "calories": 40.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Coconut Milk",
+    "category": { "name": "Fruits" },
+    "isAllergen": true,
+    "allergy": { "name": "Coconut" },
+    "measurementType": "Cup",
+    "calories": 140.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Avocado",
+    "category": { "name": "Fruits" },
+    "isAllergen": true,
+    "allergy": { "name": "Avocado" },
+    "measurementType": "Piece",
+    "calories": 234.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Kiwi",
+    "category": { "name": "Fruits" },
+    "isAllergen": true,
+    "allergy": { "name": "Kiwi" },
+    "measurementType": "Piece",
+    "calories": 42.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Rice",
+    "category": { "name": "Grains" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Cup",
+    "calories": 205.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Olive Oil",
+    "category": { "name": "Oils" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Tablespoon",
+    "calories": 119.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Sugar",
+    "category": { "name": "Sweeteners" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Teaspoon",
+    "calories": 16.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Chicken Breast",
+    "category": { "name": "Poultry" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Ounce",
+    "calories": 165.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Beef",
+    "category": { "name": "Meat" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Ounce",
+    "calories": 250.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Spinach",
+    "category": { "name": "Vegetables" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Cup",
+    "calories": 7.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Tomato",
+    "category": { "name": "Vegetables" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Piece",
+    "calories": 22.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Basil",
+    "category": { "name": "Herbs" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Teaspoon",
+    "calories": 1.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Black Pepper",
+    "category": { "name": "Spices" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Pinch",
+    "calories": 3.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Honey",
+    "category": { "name": "Sweeteners" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Tablespoon",
+    "calories": 64.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Carrot",
+    "category": { "name": "Vegetables" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Piece",
+    "calories": 25.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Broccoli",
+    "category": { "name": "Vegetables" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Cup",
+    "calories": 55.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Apple",
+    "category": { "name": "Fruits" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Piece",
+    "calories": 95.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Oats",
+    "category": { "name": "Grains" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Cup",
+    "calories": 389.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Sunflower Seeds",
+    "category": { "name": "Seeds" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Tablespoon",
+    "calories": 51.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Lentils",
+    "category": { "name": "Legumes" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Cup",
+    "calories": 230.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Cinnamon",
+    "category": { "name": "Spices" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Teaspoon",
+    "calories": 6.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Vinegar",
+    "category": { "name": "Fermented Ingredients" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Tablespoon",
+    "calories": 3.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Blueberries",
+    "category": { "name": "Fruits" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Cup",
+    "calories": 84.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Potato",
+    "category": { "name": "Vegetables" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Piece",
+    "calories": 130.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Salt",
+    "category": { "name": "Spices" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Pinch",
+    "calories": 0.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Cheddar Cheese",
+    "category": { "name": "Dairy" },
+    "isAllergen": true,
+    "allergy": { "name": "Milk" },
+    "measurementType": "Ounce",
+    "calories": 113.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Tofu",
+    "category": { "name": "Soy Products" },
+    "isAllergen": true,
+    "allergy": { "name": "Soy" },
+    "measurementType": "Cup",
+    "calories": 188.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Crab",
+    "category": { "name": "Seafood" },
+    "isAllergen": true,
+    "allergy": { "name": "Shellfish" },
+    "measurementType": "Ounce",
+    "calories": 83.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Barley",
+    "category": { "name": "Grains" },
+    "isAllergen": true,
+    "allergy": { "name": "Gluten" },
+    "measurementType": "Cup",
+    "calories": 354.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Red Food Coloring",
+    "category": { "name": "Colorings" },
+    "isAllergen": true,
+    "allergy": { "name": "Red Food Dye" },
+    "measurementType": "Drop",
+    "calories": 0.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Gelatin",
+    "category": { "name": "Additives" },
+    "isAllergen": true,
+    "allergy": { "name": "Gelatin" },
+    "measurementType": "Teaspoon",
+    "calories": 17.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Parsley",
+    "category": { "name": "Herbs" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Tablespoon",
+    "calories": 1.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Quinoa",
+    "category": { "name": "Grains" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Cup",
+    "calories": 222.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Mushrooms",
+    "category": { "name": "Vegetables" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Cup",
+    "calories": 15.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Banana",
+    "category": { "name": "Fruits" },
+    "isAllergen": true,
+    "allergy": { "name": "Banana" },
+    "measurementType": "Piece",
+    "calories": 89.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Sirloin Steak",
+    "category": { "name": "Meat" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Piece",
+    "calories": 243.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Thyme",
+    "category": { "name": "Herbs" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Teaspoon",
+    "calories": 276.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Cumin",
+    "category": { "name": "Spices" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Teaspoon",
+    "calories": 375.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Beef Broth",
+    "category": { "name": "Broths" },
+    "isAllergen": true,
+    "allergy": { "name": "Beef" },
+    "measurementType": "Cup",
+    "calories": 17.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Leeks",
+    "category": { "name": "Vegetables" },
+    "isAllergen": true,
+    "allergy": { "name": "Onion" },
+    "measurementType": "Cup",
+    "calories": 61.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Pearl Barley",
+    "category": { "name": "Grains" },
+    "isAllergen": true,
+    "allergy": { "name": "Gluten" },
+    "measurementType": "Cup",
+    "calories": 123.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Balsamic Vinegar",
+    "category": { "name": "Sauces" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Tablespoon",
+    "calories": 88.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Green Beans",
+    "category": { "name": "Vegetables" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Cup",
+    "calories": 31.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Chickpeas",
+    "category": { "name": "Legumes" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Cup",
+    "calories": 164.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Vanilla Extract",
+    "category": { "name": "Sweeteners" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Teaspoon",
+    "calories": 288.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Zucchini",
+    "category": { "name": "Vegetables" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Piece",
+    "calories": 17.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Ginger",
+    "category": { "name": "Spices" },
+    "isAllergen": true,
+    "allergy": { "name": "Ginger" },
+    "measurementType": "Teaspoon",
+    "calories": 80.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Greek Yogurt",
+    "category": { "name": "Dairy" },
+    "isAllergen": true,
+    "allergy": { "name": "Milk" },
+    "measurementType": "Cup",
+    "calories": 59.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Cauliflower",
+    "category": { "name": "Vegetables" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Cup",
+    "calories": 25.0,
+    "photoUrl": null
+  },
+  {
+    "name": "Maple Syrup",
+    "category": { "name": "Sweeteners" },
+    "isAllergen": false,
+    "allergy": null,
+    "measurementType": "Tablespoon",
+    "calories": 260.0,
+    "photoUrl": null
+  }
+]
