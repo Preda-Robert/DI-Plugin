@@ -1,5 +1,18 @@
 import * as vscode from "vscode";
 import { analyzeCSharp, ConstructorInfo } from "./csharp/analyzer";
+import {
+  buildExtractInterfaceWorkspaceEdit,
+  interfaceNameForConcreteType,
+} from "./extractInterface";
+import {
+  createRegistrationInsertEdit,
+  detectRegistrationLifetime,
+  filterNewRegistrationLines,
+  findGeneratedAppBuilderFile,
+  findRegistrationInsertTarget,
+  normalizeRegistrationLifetime,
+  parseRegistrationsFromAppBuilder,
+} from "./registrationInsert";
 
 const DIAGNOSTIC_COLLECTION = "di-plugin";
 const outputChannel = vscode.window.createOutputChannel("Dependency Injection");
@@ -343,7 +356,51 @@ async function buildWorkspaceSummary(): Promise<WorkspaceDiSummary> {
   };
 }
 
-function createRegistrationEdit(doc: vscode.TextDocument, typeName: string): vscode.WorkspaceEdit | undefined {
+function registrationLifetimeForSummary(
+  summary: WorkspaceDiSummary,
+  compositionRootSource?: string
+): "Scoped" | "Transient" | "Singleton" {
+  if (compositionRootSource) {
+    return detectRegistrationLifetime(compositionRootSource);
+  }
+  return summary.aspNetMvcHost ? "Scoped" : "Transient";
+}
+
+function buildRegistrationLineForMissingType(
+  typeName: string,
+  summary: WorkspaceDiSummary,
+  compositionRootSource?: string
+): string | undefined {
+  const lifetime = registrationLifetimeForSummary(summary, compositionRootSource);
+
+  if (/^I[A-Z]/.test(typeName)) {
+    if (summary.registeredTypes.has(typeName)) return undefined;
+    for (const [iface, impls] of summary.interfaceToImpl) {
+      if (iface === typeName && impls.size > 0) {
+        const impl = [...impls][0];
+        return `services.Add${lifetime}<${iface}, ${impl}>();`;
+      }
+    }
+    return `services.Add${lifetime}<${typeName}>();`;
+  }
+
+  // Concrete type: register I{Name} → Type even when Type appears in another mapping (e.g. IEmailSender → SmtpEmailSender).
+  const iface = interfaceNameForConcreteType(typeName);
+  if (summary.registeredTypes.has(iface)) return undefined;
+  return `services.Add${lifetime}<${iface}, ${typeName}>();`;
+}
+
+function createRegistrationEdit(
+  doc: vscode.TextDocument,
+  typeName: string,
+  summary?: WorkspaceDiSummary
+): vscode.WorkspaceEdit | undefined {
+  const line =
+    summary !== undefined
+      ? buildRegistrationLineForMissingType(typeName, summary)
+      : `services.AddTransient<${typeName}>();`;
+  if (!line) return undefined;
+
   const text = doc.getText();
   const signature = "ConfigureServices(IServiceCollection services)";
   const sigIndex = text.indexOf(signature);
@@ -357,8 +414,45 @@ function createRegistrationEdit(doc: vscode.TextDocument, typeName: string): vsc
 
   const insertPos = doc.positionAt(braceIndex + 1);
   const edit = new vscode.WorkspaceEdit();
-  edit.insert(doc.uri, insertPos, `\n            services.AddTransient<${typeName}>();`);
+  edit.insert(doc.uri, insertPos, `\n            ${line}`);
   return edit;
+}
+
+async function insertRegistrationsIntoWorkspace(
+  registrationLines: string[]
+): Promise<boolean> {
+  const files = await getWorkspaceCSharpFiles();
+  const target = findRegistrationInsertTarget(files);
+  if (!target) {
+    vscode.window.showWarningMessage(
+      "DI: No CompositionRoot, Add*Services, or ConfigureServices method found to insert registrations."
+    );
+    return false;
+  }
+
+  const targetFile = files.find((f) => f.doc.uri.toString() === target.uri.toString());
+  if (!targetFile) return false;
+
+  const preferredLifetime = detectRegistrationLifetime(targetFile.source);
+  const normalized = normalizeRegistrationLifetime(registrationLines, preferredLifetime);
+  const newLines = filterNewRegistrationLines(targetFile.source, normalized);
+  if (newLines.length === 0) {
+    vscode.window.showInformationMessage("DI: All registrations are already present in the composition root.");
+    return false;
+  }
+
+  const edit = createRegistrationInsertEdit(target, newLines);
+  if (!edit) return false;
+
+  const applied = await vscode.workspace.applyEdit(edit);
+  if (applied) {
+    const doc = await vscode.workspace.openTextDocument(target.uri);
+    await vscode.window.showTextDocument(doc);
+    vscode.window.showInformationMessage(
+      `DI: Inserted ${newLines.length} registration(s) into ${target.label}.`
+    );
+  }
+  return applied;
 }
 
 function buildRegistrationSuggestions(constructors: ConstructorInfo[], source: string): string[] {
@@ -451,7 +545,12 @@ function isImplementationOfMappedInterface(className: string, summary: Workspace
   return false;
 }
 
-function buildWorkspaceRegistrationSuggestions(summary: WorkspaceDiSummary): string[] {
+function buildWorkspaceRegistrationSuggestions(
+  summary: WorkspaceDiSummary,
+  preferredLifetime?: "Scoped" | "Transient" | "Singleton"
+): string[] {
+  const lifetime =
+    preferredLifetime ?? (summary.aspNetMvcHost ? "Scoped" : "Transient");
   const suggestions = new Set<string>();
   for (const [iface, impls] of summary.interfaceToImpl.entries()) {
     if (!shouldSuggestInterfaceRegistration(iface)) continue;
@@ -459,7 +558,7 @@ function buildWorkspaceRegistrationSuggestions(summary: WorkspaceDiSummary): str
       if (isInTestNamespace(impl, summary)) continue;
       if (summary.genericClassNames.has(impl)) continue;
       if (summary.registeredTypes.has(iface)) continue;
-      suggestions.add(`services.AddScoped<${iface}, ${impl}>();`);
+      suggestions.add(`services.Add${lifetime}<${iface}, ${impl}>();`);
     }
   }
   for (const c of summary.constructors) {
@@ -468,7 +567,7 @@ function buildWorkspaceRegistrationSuggestions(summary: WorkspaceDiSummary): str
     if (!shouldSuggestConcreteRegistration(c.className, ext.relativePath, summary)) continue;
     if (isImplementationOfMappedInterface(c.className, summary)) continue;
     if (summary.registeredTypes.has(c.className)) continue;
-    suggestions.add(`services.AddTransient<${c.className}>();`);
+    suggestions.add(`services.Add${lifetime}<${c.className}>();`);
   }
   return Array.from(suggestions).sort();
 }
@@ -643,6 +742,10 @@ function buildWorkspaceFactorySuggestions(summary: WorkspaceDiSummary): string[]
   return suggestions;
 }
 
+function rangesOverlap(a: vscode.Range, b: vscode.Range): boolean {
+  return !a.isEmpty && !b.isEmpty && a.intersection(b) !== undefined;
+}
+
 class DiCodeActionProvider implements vscode.CodeActionProvider {
   provideCodeActions(
     document: vscode.TextDocument,
@@ -650,26 +753,86 @@ class DiCodeActionProvider implements vscode.CodeActionProvider {
     context: vscode.CodeActionContext
   ): vscode.ProviderResult<vscode.CodeAction[]> {
     const actions: vscode.CodeAction[] = [];
+    const { concreteTypeIssues } = analyzeCSharp(document.getText());
 
     for (const diag of context.diagnostics) {
       if (diag.source !== DIAGNOSTIC_COLLECTION) continue;
 
-      // Quick fix for missing registration diagnostics
       if (diag.message.startsWith("DI: No Add*(")) {
         const match = diag.message.match(/<([^,>]+),/);
         const paramType = match ? match[1].trim() : undefined;
         if (!paramType) continue;
 
-        const edit = createRegistrationEdit(document, paramType);
-        if (!edit) continue;
+        const localEdit = createRegistrationEdit(document, paramType);
+        if (localEdit) {
+          const action = new vscode.CodeAction(
+            `Add DI registration for ${paramType} (this file)`,
+            vscode.CodeActionKind.QuickFix
+          );
+          action.diagnostics = [diag];
+          action.edit = localEdit;
+          actions.push(action);
+        }
 
-        const action = new vscode.CodeAction(
-          `Add DI registration for ${paramType}`,
+        const workspaceAction = new vscode.CodeAction(
+          `Insert workspace DI registration for ${paramType}`,
           vscode.CodeActionKind.QuickFix
         );
-        action.diagnostics = [diag];
-        action.edit = edit;
-        actions.push(action);
+        workspaceAction.diagnostics = [diag];
+        workspaceAction.command = {
+          command: "di-plugin.insertRegistrationForType",
+          title: `Insert workspace registration for ${paramType}`,
+          arguments: [paramType],
+        };
+        actions.push(workspaceAction);
+      }
+
+      if (diag.message.includes("Prefer interface over concrete type")) {
+        const typeMatch = diag.message.match(/concrete type "([^"]+)"/);
+        const concreteType = typeMatch?.[1];
+        if (!concreteType) continue;
+
+        const issue = concreteTypeIssues.find((i) =>
+          rangesOverlap(
+            diag.range,
+            new vscode.Range(
+              safePosition(document, i.startIndex),
+              safePosition(document, i.endIndex)
+            )
+          )
+        );
+        if (!issue) continue;
+
+        const iface = interfaceNameForConcreteType(concreteType);
+        const registerAction = new vscode.CodeAction(
+          `Register ${iface} → ${concreteType} in composition root`,
+          vscode.CodeActionKind.QuickFix
+        );
+        registerAction.diagnostics = [diag];
+        registerAction.command = {
+          command: "di-plugin.insertRegistrationForType",
+          title: `Register ${iface} → ${concreteType}`,
+          arguments: [concreteType],
+        };
+        actions.push(registerAction);
+
+        const extractAction = new vscode.CodeAction(
+          `Extract ${iface} and register`,
+          vscode.CodeActionKind.QuickFix
+        );
+        extractAction.diagnostics = [diag];
+        extractAction.command = {
+          command: "di-plugin.extractInterfaceAndRegister",
+          title: `Extract ${iface} and register`,
+          arguments: [
+            document.uri.toString(),
+            concreteType,
+            issue.className,
+            issue.startIndex,
+            issue.endIndex,
+          ],
+        };
+        actions.push(extractAction);
       }
     }
 
@@ -1086,6 +1249,109 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
+  const insertWorkspaceRegistrationsCommand = vscode.commands.registerCommand(
+    "di-plugin.insertWorkspaceRegistrations",
+    async () => {
+      const summary = await buildWorkspaceSummary();
+      const files = await getWorkspaceCSharpFiles();
+      const target = findRegistrationInsertTarget(files);
+      const targetSource = target
+        ? files.find((f) => f.doc.uri.toString() === target.uri.toString())?.source
+        : undefined;
+      const preferredLifetime = targetSource
+        ? detectRegistrationLifetime(targetSource)
+        : undefined;
+      const lines = buildWorkspaceRegistrationSuggestions(summary, preferredLifetime);
+      if (lines.length === 0) {
+        vscode.window.showInformationMessage(
+          "DI: No missing registrations to insert (workspace appears fully wired)."
+        );
+        return;
+      }
+      await insertRegistrationsIntoWorkspace(lines);
+    }
+  );
+
+  const insertRegistrationForTypeCommand = vscode.commands.registerCommand(
+    "di-plugin.insertRegistrationForType",
+    async (typeName: string) => {
+      if (!typeName) return;
+      const summary = await buildWorkspaceSummary();
+      const files = await getWorkspaceCSharpFiles();
+      const target = findRegistrationInsertTarget(files);
+      const targetSource = target
+        ? files.find((f) => f.doc.uri.toString() === target.uri.toString())?.source
+        : undefined;
+      const line = buildRegistrationLineForMissingType(typeName, summary, targetSource);
+      if (!line) {
+        vscode.window.showInformationMessage(`DI: ${typeName} is already registered.`);
+        return;
+      }
+      await insertRegistrationsIntoWorkspace([line]);
+    }
+  );
+
+  const mergeGeneratedIntoCompositionRootCommand = vscode.commands.registerCommand(
+    "di-plugin.mergeGeneratedIntoCompositionRoot",
+    async () => {
+      const folder = vscode.workspace.workspaceFolders?.[0];
+      if (!folder) {
+        vscode.window.showInformationMessage("Open a workspace folder first.");
+        return;
+      }
+
+      const appBuilderUri = await findGeneratedAppBuilderFile(folder);
+      if (!appBuilderUri) {
+        vscode.window.showWarningMessage(
+          "DI: No GeneratedDI/AppBuilder.cs found. Run “Generate builders/factories files (workspace)” first."
+        );
+        return;
+      }
+
+      const appBuilderDoc = await vscode.workspace.openTextDocument(appBuilderUri);
+      const lines = parseRegistrationsFromAppBuilder(appBuilderDoc.getText());
+      if (lines.length === 0) {
+        vscode.window.showWarningMessage("DI: AppBuilder.cs contains no services.Add* lines to merge.");
+        return;
+      }
+
+      await insertRegistrationsIntoWorkspace(lines);
+    }
+  );
+
+  const extractInterfaceAndRegisterCommand = vscode.commands.registerCommand(
+    "di-plugin.extractInterfaceAndRegister",
+    async (
+      docUri: string,
+      concreteType: string,
+      consumerClassName: string,
+      paramStart: number,
+      paramEnd: number
+    ) => {
+      const consumerDoc = await vscode.workspace.openTextDocument(vscode.Uri.parse(docUri));
+      const files = await getWorkspaceCSharpFiles();
+      const built = buildExtractInterfaceWorkspaceEdit({
+        concreteType,
+        consumerClassName,
+        consumerDoc,
+        paramStartOffset: paramStart,
+        paramEndOffset: paramEnd,
+        files,
+      });
+      if (!built) {
+        vscode.window.showWarningMessage(
+          `DI: Could not extract interface for ${concreteType} (implementation class not found).`
+        );
+        return;
+      }
+
+      const applied = await vscode.workspace.applyEdit(built.edit);
+      if (!applied) return;
+
+      await insertRegistrationsIntoWorkspace([built.registrationLine]);
+    }
+  );
+
   const codeActionProvider = vscode.languages.registerCodeActionsProvider(
     "csharp",
     new DiCodeActionProvider(),
@@ -1102,6 +1368,10 @@ export function activate(context: vscode.ExtensionContext) {
     suggestFactoriesCommand,
     suggestWorkspaceFactoriesCommand,
     generateWorkspaceFactoriesCommand,
+    insertWorkspaceRegistrationsCommand,
+    insertRegistrationForTypeCommand,
+    mergeGeneratedIntoCompositionRootCommand,
+    extractInterfaceAndRegisterCommand,
     codeActionProvider
   );
 

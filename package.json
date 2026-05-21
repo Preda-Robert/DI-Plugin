@@ -42,6 +42,14 @@
       {
         "command": "di-plugin.generateWorkspaceFactories",
         "title": "DI: Generate builders/factories files (workspace)"
+      },
+      {
+        "command": "di-plugin.insertWorkspaceRegistrations",
+        "title": "DI: Insert missing registrations (workspace)"
+      },
+      {
+        "command": "di-plugin.mergeGeneratedIntoCompositionRoot",
+        "title": "DI: Merge GeneratedDI into CompositionRoot"
       }
     ]
   },

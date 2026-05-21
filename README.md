@@ -13,6 +13,11 @@
 - **Diagnostics:** opening or editing a C# file shows:
   - Informational hints on constructors with their dependency list.
   - **Warnings** for DI issues: concrete types in constructors (prefer interfaces), circular dependencies within the file, and missing `Add*(<T,...>)` registrations **in the same file** (with Quick Fix where applicable).
+- **Phase 4 — quick fixes & composition root:**
+  - **Quick Fix:** insert registration in the current file (`ConfigureServices`) or **into the workspace composition root** (`CompositionRoot`, `Add*Services`, or `ConfigureServices`).
+  - **Quick Fix:** **Extract `I…` interface and register** for concrete constructor parameters (creates interface file, updates implementation and parameter type, inserts registration).
+  - **Command:** **"DI: Insert missing registrations (workspace)"** — writes suggested `services.Add*` lines into the detected composition root.
+  - **Command:** **"DI: Merge GeneratedDI into CompositionRoot"** — copies registrations from `GeneratedDI/AppBuilder.cs` into your existing `CompositionRoot` / `AddApplicationServices` (skips duplicates).
 
 ## How to run
 
@@ -29,8 +34,9 @@ Press **F5** in VS Code to launch the Extension Development Host. Open a `.cs` f
 For workspace-level testing, open one of:
 - `sample/BaseSample`
 - `sample/BuilderFactorySample`
+- `sample/MealPlanner` (ASP.NET Core API with `AddApplicationServices`)
 
-Then run workspace commands from Command Palette.
+Then run workspace commands from Command Palette. For **Phase 4**, try **BuilderFactorySample**: run **"DI: Merge GeneratedDI into CompositionRoot"** or **"DI: Insert missing registrations (workspace)"**, and use the lightbulb on `ConcreteMailerService`’s `SmtpEmailSender` parameter for **Extract interface and register**.
 
 ## Roadmap
 
@@ -39,7 +45,7 @@ Then run workspace commands from Command Palette.
 | **1** ✅ | Parse C# and find constructors + dependencies. |
 | **2** ✅ | Detect DI issues: circular dependencies, concrete types instead of interfaces, same-file missing registrations; workspace-wide missing registration hints. |
 | **3** ✅ | Suggest or generate registration code for `Microsoft.Extensions.DependencyInjection`: file + workspace suggestion commands; generated `AppBuilder` wiring inferred interface→implementation mappings and service registrations. |
-| **4** | Quick fixes and refactors beyond current scope (e.g. workspace-wide registration insert, "Extract interface and register", merge/replace existing `CompositionRoot`). |
+| **4** ✅ | Quick fixes and composition-root workflows: workspace registration insert, extract interface and register, merge `GeneratedDI/AppBuilder` into `CompositionRoot` / `Add*Services`. |
 
 ## Tech
 
