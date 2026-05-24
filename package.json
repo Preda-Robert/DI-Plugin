@@ -33,11 +33,11 @@
       },
       {
         "command": "di-plugin.suggestFactories",
-        "title": "DI: Suggest builders/factories for current file"
+        "title": "DI: Suggest factories for current file"
       },
       {
         "command": "di-plugin.suggestWorkspaceFactories",
-        "title": "DI: Suggest builders/factories for workspace"
+        "title": "DI: Suggest factories for workspace"
       },
       {
         "command": "di-plugin.generateWorkspaceFactories",

@@ -16,9 +16,6 @@ namespace ShopApp
             services.AddScoped<IClock, SystemClock>();
             services.AddScoped<ITemplateEngine, BasicTemplateEngine>();
             // Missing on purpose: IEmailSender and OrderNotificationService
-
-
-            services.AddScoped<ISmtpEmailSender, SmtpEmailSender>();
             return services.BuildServiceProvider();
         }
     }

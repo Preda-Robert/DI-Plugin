@@ -8,8 +8,15 @@
 
 - **C# parsing** with tree-sitter: finds classes and constructors, extracts parameter types (dependencies).
 - **Commands (file):** **"DI: Analyze current file"**, **"DI: Suggest registrations for current file"** — Output channel **Dependency Injection** lists constructors, dependencies, and DI issues.
-- **Commands (workspace):** **"DI: Analyze workspace"**, **"DI: Suggest registrations for workspace"** — cross-file missing registration hints and registration lines inferred from `public class Impl : IService` patterns plus `AddSingleton|AddScoped|AddTransient<...>` scanning.
-- **Commands (builders/factories):** **"DI: Suggest builders/factories for current file"** (with workspace fallback), **"DI: Suggest builders/factories for workspace"**, **"DI: Generate builders/factories files (workspace)"** — writes `GeneratedDI/` (e.g. `AppBuilder.cs`, `*Factory.cs`) using `Microsoft.Extensions.DependencyInjection`.
+- **Commands (workspace):** **"DI: Analyze workspace"**, **"DI: Suggest registrations for workspace"** — `services.Add*` lines for your composition root (what to register in DI).
+- **Commands (factories):** **"DI: Suggest factories for current file"** / **workspace** — `*Factory.cs` classes for services with **3+ interface constructor dependencies** (how to *construct* a complex service via `IServiceProvider`). Does **not** repeat registration lines; use registration commands for `Add*`.
+- **Command (generate):** **"DI: Generate builders/factories files (workspace)"** — writes `GeneratedDI/` (`AppBuilder.cs` + `*Factory.cs`) to disk; merge AppBuilder registrations with **"DI: Merge GeneratedDI into CompositionRoot"**.
+
+| You want… | Command |
+|-----------|---------|
+| Lines to paste into `CompositionRoot` / `AddApplicationServices` | Suggest **registrations** (workspace) or **Insert missing registrations** |
+| A factory class for a service with many interface deps | Suggest **factories** (workspace) |
+| Files on disk (`GeneratedDI/`) | **Generate** builders/factories files |
 - **Diagnostics:** opening or editing a C# file shows:
   - Informational hints on constructors with their dependency list.
   - **Warnings** for DI issues: concrete types in constructors (prefer interfaces), circular dependencies within the file, and missing `Add*(<T,...>)` registrations **in the same file** (with Quick Fix where applicable).
@@ -31,12 +38,17 @@ Press **F5** in VS Code to launch the Extension Development Host. Open a `.cs` f
 - Constructors are underlined with an informational message listing their dependencies.
 - For registrations and generated DI wiring, use **"DI: Suggest registrations for current file"** / **"DI: Suggest registrations for workspace"** and **"DI: Generate builders/factories files (workspace)"** (see Features).
 
-For workspace-level testing, open one of:
-- `sample/BaseSample`
-- `sample/BuilderFactorySample`
-- `sample/MealPlanner` (ASP.NET Core API with `AddApplicationServices`)
+For workspace-level testing, open one sample folder as the workspace root (see [sample/SAMPLES.md](sample/SAMPLES.md)):
 
-Then run workspace commands from Command Palette. For **Phase 4**, try **BuilderFactorySample**: run **"DI: Merge GeneratedDI into CompositionRoot"** or **"DI: Insert missing registrations (workspace)"**, and use the lightbulb on `ConcreteMailerService`’s `SmtpEmailSender` parameter for **Extract interface and register**.
+| Sample | Best for |
+|--------|----------|
+| `sample/BaseSample` | Registration suggest from empty project |
+| `sample/BuilderFactorySample` | Single factory + merge / extract-interface quick fixes |
+| `sample/CheckoutSample` | Checkout orchestrator (4 deps) + simple 2-dep service (no factory) |
+| `sample/MultiFactorySample` | **Two** factories (import + export pipelines) in one workspace |
+| `sample/MealPlanner` | Full ASP.NET API, AutoMapper, Identity |
+
+**Factory commands:** open `CheckoutSample` or `MultiFactorySample` → **DI: Suggest factories for workspace** → **Generate builders/factories files** → **Merge GeneratedDI into CompositionRoot**.
 
 ## Roadmap
 
