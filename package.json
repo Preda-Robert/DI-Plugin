@@ -1,5 +1,6 @@
 {
   "name": "di-plugin",
+  "publisher": "PredaRobert",
   "displayName": "Dependency Injection Plugin",
   "description": "C# dependency injection: analyze constructors, detect missing registrations and circular dependencies, suggest builders/factories.",
   "version": "0.1.0",
@@ -33,15 +34,23 @@
       },
       {
         "command": "di-plugin.suggestFactories",
-        "title": "DI: Suggest builders/factories for current file"
+        "title": "DI: Suggest factories for current file"
       },
       {
         "command": "di-plugin.suggestWorkspaceFactories",
-        "title": "DI: Suggest builders/factories for workspace"
+        "title": "DI: Suggest factories for workspace"
       },
       {
         "command": "di-plugin.generateWorkspaceFactories",
         "title": "DI: Generate builders/factories files (workspace)"
+      },
+      {
+        "command": "di-plugin.insertWorkspaceRegistrations",
+        "title": "DI: Insert missing registrations (workspace)"
+      },
+      {
+        "command": "di-plugin.mergeGeneratedIntoCompositionRoot",
+        "title": "DI: Merge GeneratedDI into CompositionRoot"
       }
     ]
   },
@@ -59,5 +68,9 @@
     "@types/node": "^20.10.0",
     "@types/vscode": "^1.85.0",
     "typescript": "^5.3.0"
-  }
+  },
+  "repository": {
+  "type": "git",
+  "url": "https://github.com/Preda-Robert/DI-Plugin"
+}
 }

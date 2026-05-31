@@ -1,5 +1,19 @@
 import * as vscode from "vscode";
 import { analyzeCSharp, ConstructorInfo } from "./csharp/analyzer";
+import {
+  buildExtractInterfaceWorkspaceEdit,
+  interfaceNameForConcreteType,
+} from "./extractInterface";
+import {
+  createRegistrationInsertEdit,
+  detectRegistrationLifetime,
+  filterNewRegistrationLines,
+  findGeneratedAppBuilderFile,
+  findRegistrationInsertTarget,
+  normalizeRegistrationLifetime,
+  parseRegistrationsFromAppBuilder,
+  type WorkspaceFileRef,
+} from "./registrationInsert";
 
 const DIAGNOSTIC_COLLECTION = "di-plugin";
 const outputChannel = vscode.window.createOutputChannel("Dependency Injection");
@@ -187,6 +201,11 @@ function collectExtendedRegistrationTypes(source: string): Set<string> {
     types.add(sdMatch[2].trim());
   }
 
+  // AddAutoMapper(...) registers IMapper (AutoMapper.Extensions.Microsoft.DependencyInjection)
+  if (/\bAddAutoMapper\s*\(/.test(source)) {
+    types.add("IMapper");
+  }
+
   // AddIdentity<TUser, TRole>() registers identity managers for TUser / TRole
   const idMatch = source.match(/AddIdentity\s*<\s*([^,>]+)\s*,\s*([^>]+)\s*>/);
   if (idMatch) {
@@ -195,6 +214,27 @@ function collectExtendedRegistrationTypes(source: string): Set<string> {
     types.add(`UserManager<${user}>`);
     types.add(`SignInManager<${user}>`);
     types.add(`RoleManager<${role}>`);
+  }
+
+  // AddIdentityCore<TUser>() (common in minimal hosting / JWT APIs)
+  const idCore = /AddIdentityCore\s*<\s*([^>]+)\s*>/g;
+  let idCoreMatch: RegExpExecArray | null;
+  while ((idCoreMatch = idCore.exec(source)) !== null) {
+    const user = idCoreMatch[1].trim();
+    types.add(`UserManager<${user}>`);
+    types.add(`SignInManager<${user}>`);
+  }
+
+  // .AddRoles<TRole>() / AddRoleManager<RoleManager<TRole>>()
+  const addRoles = /AddRoles\s*<\s*([^>]+)\s*>/g;
+  let rolesMatch: RegExpExecArray | null;
+  while ((rolesMatch = addRoles.exec(source)) !== null) {
+    types.add(`RoleManager<${rolesMatch[1].trim()}>`);
+  }
+  const addRoleMgr = /AddRoleManager\s*<\s*RoleManager\s*<\s*([^>]+)\s*>\s*>/g;
+  let rmMatch: RegExpExecArray | null;
+  while ((rmMatch = addRoleMgr.exec(source)) !== null) {
+    types.add(`RoleManager<${rmMatch[1].trim()}>`);
   }
 
   return types;
@@ -219,10 +259,13 @@ function isLikelyMvcControllerClass(className: string): boolean {
 
 function isImplicitFrameworkDependency(paramType: string, summary: WorkspaceDiSummary): boolean {
   const t = paramType.trim();
+  if (t === "IServiceProvider" || t === "IServiceScopeFactory") return true;
   if (t === "IWebHostEnvironment" || t === "IHostEnvironment") return true;
   if (t === "IHostApplicationLifetime" || t === "IConfiguration") return true;
   if (t === "ILogger" || t.startsWith("ILogger<")) return true;
-  if (t.startsWith("IOptions<") || t.startsWith("IOptionsSnapshot<")) return true;
+  if (t.startsWith("IOptions<") || t.startsWith("IOptionsSnapshot<") || t.startsWith("IOptionsMonitor<")) {
+    return true;
+  }
   if (summary.aspNetMvcHost && isLikelyMvcControllerClass(t)) return false;
   return false;
 }
@@ -343,7 +386,74 @@ async function buildWorkspaceSummary(): Promise<WorkspaceDiSummary> {
   };
 }
 
-function createRegistrationEdit(doc: vscode.TextDocument, typeName: string): vscode.WorkspaceEdit | undefined {
+function registrationLifetimeForSummary(
+  summary: WorkspaceDiSummary,
+  compositionRootSource?: string
+): "Scoped" | "Transient" | "Singleton" {
+  if (compositionRootSource) {
+    return detectRegistrationLifetime(compositionRootSource);
+  }
+  return summary.aspNetMvcHost ? "Scoped" : "Transient";
+}
+
+function getCompositionRootSource(files: WorkspaceFileRef[]): string | undefined {
+  const target = findRegistrationInsertTarget(files);
+  if (!target) return undefined;
+  return files.find((f) => f.doc.uri.toString() === target.uri.toString())?.source;
+}
+
+/** Same lifetime for suggest, insert, and generated AppBuilder output. */
+function preferredLifetimeForWorkspace(
+  summary: WorkspaceDiSummary,
+  files: WorkspaceFileRef[]
+): "Scoped" | "Transient" | "Singleton" {
+  const rootSource = getCompositionRootSource(files);
+  if (rootSource) {
+    return detectRegistrationLifetime(rootSource);
+  }
+  for (const file of files) {
+    if (/services\.Add(?:Scoped|Transient|Singleton)</.test(file.source)) {
+      return detectRegistrationLifetime(file.source);
+    }
+  }
+  return registrationLifetimeForSummary(summary, undefined);
+}
+
+function buildRegistrationLineForMissingType(
+  typeName: string,
+  summary: WorkspaceDiSummary,
+  compositionRootSource?: string
+): string | undefined {
+  const lifetime = registrationLifetimeForSummary(summary, compositionRootSource);
+
+  if (/^I[A-Z]/.test(typeName)) {
+    if (summary.registeredTypes.has(typeName)) return undefined;
+    for (const [iface, impls] of summary.interfaceToImpl) {
+      if (iface === typeName && impls.size > 0) {
+        const impl = [...impls][0];
+        return `services.Add${lifetime}<${iface}, ${impl}>();`;
+      }
+    }
+    return `services.Add${lifetime}<${typeName}>();`;
+  }
+
+  // Concrete type: register I{Name} → Type even when Type appears in another mapping (e.g. IEmailSender → SmtpEmailSender).
+  const iface = interfaceNameForConcreteType(typeName);
+  if (summary.registeredTypes.has(iface)) return undefined;
+  return `services.Add${lifetime}<${iface}, ${typeName}>();`;
+}
+
+function createRegistrationEdit(
+  doc: vscode.TextDocument,
+  typeName: string,
+  summary?: WorkspaceDiSummary
+): vscode.WorkspaceEdit | undefined {
+  const line =
+    summary !== undefined
+      ? buildRegistrationLineForMissingType(typeName, summary)
+      : `services.AddTransient<${typeName}>();`;
+  if (!line) return undefined;
+
   const text = doc.getText();
   const signature = "ConfigureServices(IServiceCollection services)";
   const sigIndex = text.indexOf(signature);
@@ -357,8 +467,45 @@ function createRegistrationEdit(doc: vscode.TextDocument, typeName: string): vsc
 
   const insertPos = doc.positionAt(braceIndex + 1);
   const edit = new vscode.WorkspaceEdit();
-  edit.insert(doc.uri, insertPos, `\n            services.AddTransient<${typeName}>();`);
+  edit.insert(doc.uri, insertPos, `\n            ${line}`);
   return edit;
+}
+
+async function insertRegistrationsIntoWorkspace(
+  registrationLines: string[]
+): Promise<boolean> {
+  const files = await getWorkspaceCSharpFiles();
+  const target = findRegistrationInsertTarget(files);
+  if (!target) {
+    vscode.window.showWarningMessage(
+      "DI: No CompositionRoot, Add*Services, or ConfigureServices method found to insert registrations."
+    );
+    return false;
+  }
+
+  const targetFile = files.find((f) => f.doc.uri.toString() === target.uri.toString());
+  if (!targetFile) return false;
+
+  const preferredLifetime = detectRegistrationLifetime(targetFile.source);
+  const normalized = normalizeRegistrationLifetime(registrationLines, preferredLifetime);
+  const newLines = filterNewRegistrationLines(targetFile.source, normalized);
+  if (newLines.length === 0) {
+    vscode.window.showInformationMessage("DI: All registrations are already present in the composition root.");
+    return false;
+  }
+
+  const edit = createRegistrationInsertEdit(target, newLines);
+  if (!edit) return false;
+
+  const applied = await vscode.workspace.applyEdit(edit);
+  if (applied) {
+    const doc = await vscode.workspace.openTextDocument(target.uri);
+    await vscode.window.showTextDocument(doc);
+    vscode.window.showInformationMessage(
+      `DI: Inserted ${newLines.length} registration(s) into ${target.label}.`
+    );
+  }
+  return applied;
 }
 
 function buildRegistrationSuggestions(constructors: ConstructorInfo[], source: string): string[] {
@@ -451,7 +598,12 @@ function isImplementationOfMappedInterface(className: string, summary: Workspace
   return false;
 }
 
-function buildWorkspaceRegistrationSuggestions(summary: WorkspaceDiSummary): string[] {
+function buildWorkspaceRegistrationSuggestions(
+  summary: WorkspaceDiSummary,
+  preferredLifetime?: "Scoped" | "Transient" | "Singleton"
+): string[] {
+  const lifetime =
+    preferredLifetime ?? (summary.aspNetMvcHost ? "Scoped" : "Transient");
   const suggestions = new Set<string>();
   for (const [iface, impls] of summary.interfaceToImpl.entries()) {
     if (!shouldSuggestInterfaceRegistration(iface)) continue;
@@ -459,16 +611,18 @@ function buildWorkspaceRegistrationSuggestions(summary: WorkspaceDiSummary): str
       if (isInTestNamespace(impl, summary)) continue;
       if (summary.genericClassNames.has(impl)) continue;
       if (summary.registeredTypes.has(iface)) continue;
-      suggestions.add(`services.AddScoped<${iface}, ${impl}>();`);
+      suggestions.add(`services.Add${lifetime}<${iface}, ${impl}>();`);
     }
   }
+  const factoryNames = factoryTargetClassNames(getWorkspaceFactoryTargets(summary));
   for (const c of summary.constructors) {
     if (!c.className) continue;
     const ext = c as ConstructorInfo & { fileName: string; relativePath: string };
     if (!shouldSuggestConcreteRegistration(c.className, ext.relativePath, summary)) continue;
+    if (factoryNames.has(c.className)) continue;
     if (isImplementationOfMappedInterface(c.className, summary)) continue;
     if (summary.registeredTypes.has(c.className)) continue;
-    suggestions.add(`services.AddTransient<${c.className}>();`);
+    suggestions.add(`services.Add${lifetime}<${c.className}>();`);
   }
   return Array.from(suggestions).sort();
 }
@@ -477,6 +631,23 @@ function shouldGenerateFactory(c: ConstructorInfo, interfaceNames: Set<string>):
   if (!c.className || c.parameters.length === 0) return false;
   // More conservative: generate only for genuinely complex DI services.
   return c.parameters.length >= 3 && c.parameters.every((p) => interfaceNames.has(p.type));
+}
+
+function factoryTargetClassNames(factoryTargets: ConstructorInfo[]): Set<string> {
+  return new Set(
+    factoryTargets.map((c) => c.className).filter((name): name is string => Boolean(name))
+  );
+}
+
+/** Interface types required to construct factory-backed services (for complete AppBuilder wiring). */
+function collectFactoryDependencyInterfaces(factoryTargets: ConstructorInfo[]): Set<string> {
+  const types = new Set<string>();
+  for (const c of factoryTargets) {
+    for (const p of c.parameters) {
+      if (/^I[A-Z]/.test(p.type)) types.add(p.type);
+    }
+  }
+  return types;
 }
 
 function getRequiredUsingsForTypes(types: string[], summary: WorkspaceDiSummary): string[] {
@@ -545,27 +716,34 @@ function extractTypesFromRegistrationLines(registrationLines: string[]): Set<str
 function buildAppBuilderFileContent(
   summary: WorkspaceDiSummary,
   namespaceName: string,
-  factoryTargets: ConstructorInfo[]
+  factoryTargets: ConstructorInfo[],
+  lifetime: "Scoped" | "Transient" | "Singleton"
 ): string {
   const registrations: string[] = [];
+  const factoryNames = factoryTargetClassNames(factoryTargets);
+  const factoryDeps = collectFactoryDependencyInterfaces(factoryTargets);
+
   for (const [iface, impls] of summary.interfaceToImpl.entries()) {
     if (!shouldSuggestInterfaceRegistration(iface)) continue;
     for (const impl of impls) {
       if (isInTestNamespace(impl, summary)) continue;
       if (summary.genericClassNames.has(impl)) continue;
-      if (summary.registeredTypes.has(iface)) continue;
-      registrations.push(`            services.AddScoped<${iface}, ${impl}>();`);
+      // Include deps required by factories even when already registered elsewhere (standalone AppBuilder).
+      if (summary.registeredTypes.has(iface) && !factoryDeps.has(iface)) continue;
+      registrations.push(`            services.Add${lifetime}<${iface}, ${impl}>();`);
     }
   }
   for (const c of summary.constructors) {
     if (!c.className) continue;
     if (!shouldSuggestConcreteRegistration(c.className, c.relativePath, summary)) continue;
+    if (factoryNames.has(c.className)) continue;
     if (summary.registeredTypes.has(c.className)) continue;
     if (isImplementationOfMappedInterface(c.className, summary)) continue;
-    registrations.push(`            services.AddScoped<${c.className}>();`);
+    registrations.push(`            services.Add${lifetime}<${c.className}>();`);
   }
   for (const c of factoryTargets) {
-    registrations.push(`            services.AddScoped<${c.className}Factory>();`);
+    if (!c.className) continue;
+    registrations.push(`            services.Add${lifetime}<${c.className}Factory>();`);
   }
 
   const uniqueRegs = Array.from(new Set(registrations)).sort();
@@ -588,7 +766,9 @@ function buildAppBuilderFileContent(
   lines.push("{");
   lines.push("    public static class AppBuilder");
   lines.push("    {");
-  lines.push("        // NOTE: Generated AppBuilder is intended to replace/supersede manual CompositionRoot wiring.");
+  lines.push(
+    "        // Factory-backed services are registered via *Factory only (not the concrete type). Merge lines into CompositionRoot or use as a checklist."
+  );
   lines.push("        public static IServiceProvider Build()");
   lines.push("        {");
   lines.push("            var services = new ServiceCollection();");
@@ -608,17 +788,27 @@ function buildAppBuilderFileContent(
   return lines.join("\n");
 }
 
-function buildWorkspaceGeneratedFiles(summary: WorkspaceDiSummary): GeneratedFile[] {
-  const namespaceName = getBestNamespace(summary);
-  const generated: GeneratedFile[] = [];
+function getWorkspaceFactoryTargets(summary: WorkspaceDiSummary): ConstructorInfo[] {
   const interfaceNames = new Set(summary.interfaceToImpl.keys());
-  const factoryTargets: ConstructorInfo[] = [];
-
+  const targets: ConstructorInfo[] = [];
   for (const c of summary.constructors) {
     if (!shouldGenerateFactory(c, interfaceNames)) continue;
     const ext = c as ConstructorInfo & { fileName: string; relativePath: string };
     if (!shouldSuggestConcreteRegistration(ext.className, ext.relativePath, summary)) continue;
-    factoryTargets.push(c);
+    targets.push(c);
+  }
+  return targets;
+}
+
+function buildWorkspaceGeneratedFiles(
+  summary: WorkspaceDiSummary,
+  lifetime: "Scoped" | "Transient" | "Singleton"
+): GeneratedFile[] {
+  const namespaceName = getBestNamespace(summary);
+  const generated: GeneratedFile[] = [];
+  const factoryTargets = getWorkspaceFactoryTargets(summary);
+
+  for (const c of factoryTargets) {
     generated.push({
       fileName: `${c.className}Factory.cs`,
       content: buildFactoryFileContent(c, namespaceName, summary),
@@ -627,20 +817,48 @@ function buildWorkspaceGeneratedFiles(summary: WorkspaceDiSummary): GeneratedFil
 
   generated.push({
     fileName: "AppBuilder.cs",
-    content: buildAppBuilderFileContent(summary, namespaceName, factoryTargets),
+    content: buildAppBuilderFileContent(summary, namespaceName, factoryTargets, lifetime),
   });
   return generated;
 }
 
-function buildWorkspaceFactorySuggestions(summary: WorkspaceDiSummary): string[] {
-  const files = buildWorkspaceGeneratedFiles(summary);
-  const suggestions: string[] = [];
-  for (const file of files) {
-    suggestions.push(`// ${file.fileName}`);
-    suggestions.push(file.content.trimEnd());
-    suggestions.push("");
+/** Factory-class snippets only — not composition-root `services.Add*` lines (see registration commands). */
+function buildWorkspaceFactorySuggestions(
+  summary: WorkspaceDiSummary,
+  lifetime: "Scoped" | "Transient" | "Singleton"
+): string[] {
+  const namespaceName = getBestNamespace(summary);
+  const factoryTargets = getWorkspaceFactoryTargets(summary);
+  const suggestions: string[] = [
+    "// Factory pattern: for types with 3+ interface constructor dependencies.",
+    "// Register the factory in DI, then call factory.Create() instead of new-ing the service directly.",
+    "// For services.Add* lines, use \"DI: Suggest registrations for workspace\" or \"Insert missing registrations\".",
+    "",
+  ];
+
+  if (factoryTargets.length === 0) {
+    suggestions.push(
+      "(No factory candidates. Services with fewer dependencies are usually registered directly via Add*.)"
+    );
+    return suggestions;
+  }
+
+  for (const c of factoryTargets) {
+    const ext = c as ConstructorInfo & { fileName: string; relativePath: string };
+    suggestions.push(
+      `// ${c.className} — ${c.parameters.length} interface deps (${ext.relativePath})`
+    );
+    suggestions.push(buildFactoryFileContent(c, namespaceName, summary).trimEnd());
+    suggestions.push(
+      `// Register: services.Add${lifetime}<${c.className}Factory>();`,
+      ""
+    );
   }
   return suggestions;
+}
+
+function rangesOverlap(a: vscode.Range, b: vscode.Range): boolean {
+  return !a.isEmpty && !b.isEmpty && a.intersection(b) !== undefined;
 }
 
 class DiCodeActionProvider implements vscode.CodeActionProvider {
@@ -650,26 +868,86 @@ class DiCodeActionProvider implements vscode.CodeActionProvider {
     context: vscode.CodeActionContext
   ): vscode.ProviderResult<vscode.CodeAction[]> {
     const actions: vscode.CodeAction[] = [];
+    const { concreteTypeIssues } = analyzeCSharp(document.getText());
 
     for (const diag of context.diagnostics) {
       if (diag.source !== DIAGNOSTIC_COLLECTION) continue;
 
-      // Quick fix for missing registration diagnostics
       if (diag.message.startsWith("DI: No Add*(")) {
         const match = diag.message.match(/<([^,>]+),/);
         const paramType = match ? match[1].trim() : undefined;
         if (!paramType) continue;
 
-        const edit = createRegistrationEdit(document, paramType);
-        if (!edit) continue;
+        const localEdit = createRegistrationEdit(document, paramType);
+        if (localEdit) {
+          const action = new vscode.CodeAction(
+            `Add DI registration for ${paramType} (this file)`,
+            vscode.CodeActionKind.QuickFix
+          );
+          action.diagnostics = [diag];
+          action.edit = localEdit;
+          actions.push(action);
+        }
 
-        const action = new vscode.CodeAction(
-          `Add DI registration for ${paramType}`,
+        const workspaceAction = new vscode.CodeAction(
+          `Insert workspace DI registration for ${paramType}`,
           vscode.CodeActionKind.QuickFix
         );
-        action.diagnostics = [diag];
-        action.edit = edit;
-        actions.push(action);
+        workspaceAction.diagnostics = [diag];
+        workspaceAction.command = {
+          command: "di-plugin.insertRegistrationForType",
+          title: `Insert workspace registration for ${paramType}`,
+          arguments: [paramType],
+        };
+        actions.push(workspaceAction);
+      }
+
+      if (diag.message.includes("Prefer interface over concrete type")) {
+        const typeMatch = diag.message.match(/concrete type "([^"]+)"/);
+        const concreteType = typeMatch?.[1];
+        if (!concreteType) continue;
+
+        const issue = concreteTypeIssues.find((i) =>
+          rangesOverlap(
+            diag.range,
+            new vscode.Range(
+              safePosition(document, i.startIndex),
+              safePosition(document, i.endIndex)
+            )
+          )
+        );
+        if (!issue) continue;
+
+        const iface = interfaceNameForConcreteType(concreteType);
+        const registerAction = new vscode.CodeAction(
+          `Register ${iface} → ${concreteType} in composition root`,
+          vscode.CodeActionKind.QuickFix
+        );
+        registerAction.diagnostics = [diag];
+        registerAction.command = {
+          command: "di-plugin.insertRegistrationForType",
+          title: `Register ${iface} → ${concreteType}`,
+          arguments: [concreteType],
+        };
+        actions.push(registerAction);
+
+        const extractAction = new vscode.CodeAction(
+          `Extract ${iface} and register`,
+          vscode.CodeActionKind.QuickFix
+        );
+        extractAction.diagnostics = [diag];
+        extractAction.command = {
+          command: "di-plugin.extractInterfaceAndRegister",
+          title: `Extract ${iface} and register`,
+          arguments: [
+            document.uri.toString(),
+            concreteType,
+            issue.className,
+            issue.startIndex,
+            issue.endIndex,
+          ],
+        };
+        actions.push(extractAction);
       }
     }
 
@@ -870,7 +1148,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (suggestions.length === 0) {
           outputChannel.appendLine("No registration suggestions generated.");
         } else {
-          outputChannel.appendLine("// Example DI registrations (adjust lifetime as needed):");
+          outputChannel.appendLine("// services.Add* lines for your composition root (not factory classes):");
           for (const line of suggestions) {
             outputChannel.appendLine("  " + line);
           }
@@ -900,7 +1178,7 @@ export function activate(context: vscode.ExtensionContext) {
       outputChannel.appendLine(`Constructors found: ${summary.constructors.length}`);
       if (summary.aspNetMvcHost) {
         outputChannel.appendLine(
-          "ASP.NET Core hosting detected: missing-registration checks skip MVC controllers and common framework services (ILogger<>, IWebHostEnvironment, Identity managers when AddIdentity is present, DbContext when AddDbContext is present)."
+          "ASP.NET Core hosting detected: missing-registration checks skip MVC controllers and framework-provided types (ILogger<>, IOptions<>, IServiceProvider, IMapper when AddAutoMapper is used, Identity managers when AddIdentity/AddIdentityCore is used, DbContext when AddDbContext is used)."
         );
       }
       outputChannel.appendLine(
@@ -946,8 +1224,12 @@ export function activate(context: vscode.ExtensionContext) {
     "di-plugin.suggestWorkspaceRegistrations",
     async () => {
       const summary = await buildWorkspaceSummary();
+      const files = await getWorkspaceCSharpFiles();
       outputChannel.clear();
       outputChannel.appendLine("DI Workspace Registration Suggestions");
+      outputChannel.appendLine(
+        "(services.Add* lines only. For factory classes, use \"DI: Suggest factories for workspace\".)"
+      );
       outputChannel.appendLine("");
 
       if (summary.files.length === 0) {
@@ -956,7 +1238,8 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      const suggestions = buildWorkspaceRegistrationSuggestions(summary);
+      const lifetime = preferredLifetimeForWorkspace(summary, files);
+      const suggestions = buildWorkspaceRegistrationSuggestions(summary, lifetime);
 
       if (suggestions.length === 0) {
         outputChannel.appendLine(
@@ -989,19 +1272,24 @@ export function activate(context: vscode.ExtensionContext) {
       // If current file has no constructor-based suggestions, fallback to workspace-wide suggestions.
       if (suggestions.length === 0) {
         const summary = await buildWorkspaceSummary();
-        suggestions = buildWorkspaceFactorySuggestions(summary);
+        const files = await getWorkspaceCSharpFiles();
+        const lifetime = preferredLifetimeForWorkspace(summary, files);
+        suggestions = buildWorkspaceFactorySuggestions(summary, lifetime);
       }
 
       outputChannel.clear();
-      outputChannel.appendLine(`DI Factory/Builder Suggestions: ${doc.fileName}`);
+      outputChannel.appendLine(`DI Factory Suggestions: ${doc.fileName}`);
+      outputChannel.appendLine(
+        "(Factories help construct services with many interface dependencies. Not the same as services.Add* registration lines.)"
+      );
       outputChannel.appendLine("");
 
       if (suggestions.length === 0) {
-        outputChannel.appendLine("No factory or builder suggestions generated.");
+        outputChannel.appendLine("No factory candidates in this file (need 3+ interface constructor parameters).");
+        outputChannel.appendLine("Use \"DI: Suggest registrations for current file\" for services.Add* lines.");
       } else {
         for (const suggestion of suggestions) {
           outputChannel.appendLine(suggestion);
-          outputChannel.appendLine("");
         }
       }
       outputChannel.show();
@@ -1012,8 +1300,9 @@ export function activate(context: vscode.ExtensionContext) {
     "di-plugin.suggestWorkspaceFactories",
     async () => {
       const summary = await buildWorkspaceSummary();
+      const files = await getWorkspaceCSharpFiles();
       outputChannel.clear();
-      outputChannel.appendLine("DI Workspace Builder/Factory Suggestions");
+      outputChannel.appendLine("DI Workspace Factory Suggestions");
       outputChannel.appendLine("");
 
       if (summary.files.length === 0) {
@@ -1022,17 +1311,10 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      const suggestions = buildWorkspaceFactorySuggestions(summary);
-      if (suggestions.length === 0) {
-        outputChannel.appendLine("No factory or builder suggestions generated.");
-      } else {
-        if (summary.hasCompositionRoot) {
-          outputChannel.appendLine("Note: Existing CompositionRoot detected; generated AppBuilder is a replacement candidate.");
-          outputChannel.appendLine("");
-        }
-        for (const line of suggestions) {
-          outputChannel.appendLine(line);
-        }
+      const lifetime = preferredLifetimeForWorkspace(summary, files);
+      const suggestions = buildWorkspaceFactorySuggestions(summary, lifetime);
+      for (const line of suggestions) {
+        outputChannel.appendLine(line);
       }
       outputChannel.show();
     }
@@ -1053,7 +1335,9 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      const generatedFiles = buildWorkspaceGeneratedFiles(summary);
+      const files = await getWorkspaceCSharpFiles();
+      const lifetime = preferredLifetimeForWorkspace(summary, files);
+      const generatedFiles = buildWorkspaceGeneratedFiles(summary, lifetime);
       if (generatedFiles.length === 0) {
         vscode.window.showInformationMessage("No builder/factory files to generate.");
         return;
@@ -1086,6 +1370,100 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
+  const insertWorkspaceRegistrationsCommand = vscode.commands.registerCommand(
+    "di-plugin.insertWorkspaceRegistrations",
+    async () => {
+      const summary = await buildWorkspaceSummary();
+      const files = await getWorkspaceCSharpFiles();
+      const lifetime = preferredLifetimeForWorkspace(summary, files);
+      const lines = buildWorkspaceRegistrationSuggestions(summary, lifetime);
+      if (lines.length === 0) {
+        vscode.window.showInformationMessage(
+          "DI: No missing registrations to insert (workspace appears fully wired)."
+        );
+        return;
+      }
+      await insertRegistrationsIntoWorkspace(lines);
+    }
+  );
+
+  const insertRegistrationForTypeCommand = vscode.commands.registerCommand(
+    "di-plugin.insertRegistrationForType",
+    async (typeName: string) => {
+      if (!typeName) return;
+      const summary = await buildWorkspaceSummary();
+      const files = await getWorkspaceCSharpFiles();
+      const rootSource = getCompositionRootSource(files);
+      const line = buildRegistrationLineForMissingType(typeName, summary, rootSource);
+      if (!line) {
+        vscode.window.showInformationMessage(`DI: ${typeName} is already registered.`);
+        return;
+      }
+      await insertRegistrationsIntoWorkspace([line]);
+    }
+  );
+
+  const mergeGeneratedIntoCompositionRootCommand = vscode.commands.registerCommand(
+    "di-plugin.mergeGeneratedIntoCompositionRoot",
+    async () => {
+      const folder = vscode.workspace.workspaceFolders?.[0];
+      if (!folder) {
+        vscode.window.showInformationMessage("Open a workspace folder first.");
+        return;
+      }
+
+      const appBuilderUri = await findGeneratedAppBuilderFile(folder);
+      if (!appBuilderUri) {
+        vscode.window.showWarningMessage(
+          "DI: No GeneratedDI/AppBuilder.cs found. Run “Generate builders/factories files (workspace)” first."
+        );
+        return;
+      }
+
+      const appBuilderDoc = await vscode.workspace.openTextDocument(appBuilderUri);
+      const lines = parseRegistrationsFromAppBuilder(appBuilderDoc.getText());
+      if (lines.length === 0) {
+        vscode.window.showWarningMessage("DI: AppBuilder.cs contains no services.Add* lines to merge.");
+        return;
+      }
+
+      await insertRegistrationsIntoWorkspace(lines);
+    }
+  );
+
+  const extractInterfaceAndRegisterCommand = vscode.commands.registerCommand(
+    "di-plugin.extractInterfaceAndRegister",
+    async (
+      docUri: string,
+      concreteType: string,
+      consumerClassName: string,
+      paramStart: number,
+      paramEnd: number
+    ) => {
+      const consumerDoc = await vscode.workspace.openTextDocument(vscode.Uri.parse(docUri));
+      const files = await getWorkspaceCSharpFiles();
+      const built = buildExtractInterfaceWorkspaceEdit({
+        concreteType,
+        consumerClassName,
+        consumerDoc,
+        paramStartOffset: paramStart,
+        paramEndOffset: paramEnd,
+        files,
+      });
+      if (!built) {
+        vscode.window.showWarningMessage(
+          `DI: Could not extract interface for ${concreteType} (implementation class not found).`
+        );
+        return;
+      }
+
+      const applied = await vscode.workspace.applyEdit(built.edit);
+      if (!applied) return;
+
+      await insertRegistrationsIntoWorkspace([built.registrationLine]);
+    }
+  );
+
   const codeActionProvider = vscode.languages.registerCodeActionsProvider(
     "csharp",
     new DiCodeActionProvider(),
@@ -1102,6 +1480,10 @@ export function activate(context: vscode.ExtensionContext) {
     suggestFactoriesCommand,
     suggestWorkspaceFactoriesCommand,
     generateWorkspaceFactoriesCommand,
+    insertWorkspaceRegistrationsCommand,
+    insertRegistrationForTypeCommand,
+    mergeGeneratedIntoCompositionRootCommand,
+    extractInterfaceAndRegisterCommand,
     codeActionProvider
   );
 
