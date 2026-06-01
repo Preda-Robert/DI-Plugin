@@ -28,6 +28,14 @@
 
 ## How to run
 
+Download the .vsix extension and run this command to install it for you Visual Studio Code:
+
+```bash
+code --install-extension di-plugin-0.0.1.vsix
+```
+
+OR
+
 ```bash
 npm install
 ```
@@ -49,15 +57,6 @@ For workspace-level testing, open one sample folder as the workspace root (see [
 | `sample/MealPlanner` | Full ASP.NET API, AutoMapper, Identity |
 
 **Factory commands:** open `CheckoutSample` or `MultiFactorySample` → **DI: Suggest factories for workspace** → **Generate builders/factories files** → **Merge GeneratedDI into CompositionRoot**.
-
-## Roadmap
-
-| Phase | Goal |
-|-------|------|
-| **1** ✅ | Parse C# and find constructors + dependencies. |
-| **2** ✅ | Detect DI issues: circular dependencies, concrete types instead of interfaces, same-file missing registrations; workspace-wide missing registration hints. |
-| **3** ✅ | Suggest or generate registration code for `Microsoft.Extensions.DependencyInjection`: file + workspace suggestion commands; generated `AppBuilder` wiring inferred interface→implementation mappings and service registrations. |
-| **4** ✅ | Quick fixes and composition-root workflows: workspace registration insert, extract interface and register, merge `GeneratedDI/AppBuilder` into `CompositionRoot` / `Add*Services`. |
 
 ## Tech
 
